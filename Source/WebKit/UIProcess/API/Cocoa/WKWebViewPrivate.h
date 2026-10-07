@@ -659,7 +659,6 @@ typedef NS_OPTIONS(NSUInteger, _WKWebViewDataType) {
 - (NSData *)_remoteAccessibilityChildToken;
 #endif
 
-- (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugText(with:completionHandler:));
 - (void)_extractDebugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(_WKTextExtractionResult *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_extractDebugText(with:completionHandler:));
 - (void)_performInteraction:(_WKTextExtractionInteraction *)interaction completionHandler:(WK_SWIFT_UI_ACTOR void(^)(_WKTextExtractionInteractionResult *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_performInteraction(_:completionHandler:));
 

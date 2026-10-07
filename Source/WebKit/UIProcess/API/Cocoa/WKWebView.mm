@@ -7259,6 +7259,15 @@ static Vector<Ref<API::TargetedElementInfo>> elementsFromWKElements(NSArray<_WKT
 #endif
 }
 
+- (void)_debugTextVisibleTextWithCompletionHandler:(void (^)(NSString *))completionHandler {
+    auto configuration = adoptNS([[_WKTextExtractionConfiguration alloc] init]);
+
+    configuration.get().filterOptions = 0;
+
+    [self _debugTextWithConfiguration:configuration.get()
+                    completionHandler:completionHandler];
+}
+
 - (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(void(^)(NSString *))completionHandler
 {
     [self _extractDebugTextWithConfiguration:configuration completionHandler:makeBlockPtr([completionHandler = makeBlockPtr(completionHandler)](_WKTextExtractionResult *result) {

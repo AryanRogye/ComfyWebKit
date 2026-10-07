@@ -54,6 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class WKPDFConfiguration;
 @class WKSnapshotConfiguration;
 @class WKWebViewConfiguration;
+@class _WKTextExtractionConfiguration;
 
 #if TARGET_OS_OSX
 @class NSRefreshController;
@@ -822,6 +823,13 @@ WK_API_AVAILABLE(macos(10.15.4))
 @end
 
 #endif
+
+@interface WKWebView (TextExtractionDebug)
+
+- (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugText(with:completionHandler:));
+- (void)_debugTextVisibleTextWithCompletionHandler:(WK_SWIFT_UI_ACTOR void (^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugTextVisibleText(completionHandler:));
+
+@end
 
 @interface WKWebView (WKDeprecated)
 
