@@ -224,6 +224,17 @@ typedef NS_ENUM(NSInteger, WKFullscreenState) {
  */
 @property (nonatomic, readonly, nullable) SecTrustRef qualifiedServerTrust WK_API_AVAILABLE(macos(WK_MAC_TBA), ios(WK_IOS_TBA), visionos(WK_XROS_TBA));
 
+/*! @abstract The process identifier (pid) of the web content process currently
+ hosting this web view's page.
+ @discussion This is the WebContent process, not the GPU or Networking process,
+ so work such as media decoding and audio output may be attributed to a
+ different pid. The value can change over the life of the web view, for example
+ after a process swap on cross-site navigation or after the web content process
+ terminates and is relaunched, so read it each time you need it instead of
+ caching it. This property is not key-value observing (KVO) compliant.
+ */
+@property (nonatomic, readonly) pid_t _webProcessIdentifier;
+
 /*! @abstract A Boolean value indicating whether there is a back item in
  the back-forward list that can be navigated to.
  @discussion @link WKWebView @/link is key-value observing (KVO) compliant
@@ -797,6 +808,14 @@ typedef NS_OPTIONS(NSUInteger, WKWebViewDataType) {
 - (IBAction)stopLoading:(nullable id)sender;
 
 @end
+
+@interface WKWebView (NowPlaying)
+
+- (void)_requestActiveNowPlayingSessionInfo:(void(^)(BOOL, BOOL, NSString *, double, double, NSInteger, NSUInteger))callback;
+- (void)_requestActiveNowPlayingSessionInfoWithPlayback:(void(^)(BOOL, BOOL, BOOL, NSString *, NSString *, double, double, double, NSInteger, NSUInteger))callback;
+
+@end
+
 
 WK_API_AVAILABLE(macos(10.15.4))
 @interface WKWebView (WKNSTextFinderClient) <NSTextFinderClient>

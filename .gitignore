@@ -104,3 +104,7 @@ CLAUDE.md
 
 # Ignore libpas builds and log-outputs
 /Source/bmalloc/build*/
+
+# logs
+build-webcore.log
+build.log

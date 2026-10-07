@@ -344,6 +344,27 @@ static void dumpCALayer(TextStream& ts, CALayer *layer, bool traverse)
     });
 }
 
+- (void)_requestActiveNowPlayingSessionInfoWithPlayback:(void(^)(BOOL, BOOL, BOOL, NSString *, NSString *, double, double, double, NSInteger, NSUInteger))callback
+{
+    if (!_page) {
+        callback(NO, NO, NO, @"", @"", std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), 0, 0);
+        return;
+    }
+    _page->requestActiveNowPlayingSessionInfo([handler = makeBlockPtr(callback)] (bool registeredAsNowPlayingApplication, WebCore::NowPlayingInfo&& nowPlayingInfo) {
+        handler(
+                nowPlayingInfo.allowsNowPlayingControlsVisibility,
+                registeredAsNowPlayingApplication,
+                nowPlayingInfo.isPlaying,
+                nowPlayingInfo.metadata.title.createNSString().get(),
+                nowPlayingInfo.metadata.artwork ? nowPlayingInfo.metadata.artwork->src.createNSString().get() : @"",
+                nowPlayingInfo.rate,
+                nowPlayingInfo.duration,
+                nowPlayingInfo.currentTime,
+                nowPlayingInfo.uniqueIdentifier ? nowPlayingInfo.uniqueIdentifier->toUInt64() : 0,
+                nowPlayingInfo.updateTime);
+    });
+}
+
 - (void)_setNowPlayingMetadataObserver:(void(^)(_WKNowPlayingMetadata *))observer
 {
     RefPtr page = _page;

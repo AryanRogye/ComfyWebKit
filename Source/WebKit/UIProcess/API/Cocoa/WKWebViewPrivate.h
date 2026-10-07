@@ -223,7 +223,6 @@ typedef NS_ENUM(NSInteger, _WKImmediateActionType) {
 @property (nonatomic, readonly, getter=_isPlayingAudio) BOOL _playingAudio WK_API_AVAILABLE(macos(10.13.4), ios(11.3));
 @property (nonatomic, setter=_setUserContentExtensionsEnabled:) BOOL _userContentExtensionsEnabled WK_API_DEPRECATED("No longer supported", macos(10.11, WK_MAC_TBA), ios(9.0, WK_IOS_TBA));
 
-@property (nonatomic, readonly) pid_t _webProcessIdentifier;
 @property (nonatomic, readonly) pid_t _provisionalWebProcessIdentifier WK_API_AVAILABLE(macos(10.14.4), ios(12.2));
 @property (nonatomic, readonly) pid_t _gpuProcessIdentifier WK_API_AVAILABLE(macos(13.0), ios(16.0));
 @property (nonatomic, readonly) pid_t _modelProcessIdentifier WK_API_AVAILABLE(macos(15.0), ios(18.0), visionos(2.0));

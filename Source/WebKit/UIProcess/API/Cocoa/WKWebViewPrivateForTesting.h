@@ -86,6 +86,7 @@ typedef NSVisualEffectView _WKPlatformVisualEffectView;
 - (NSDictionary *)_contentsOfUserInterfaceItem:(NSString *)userInterfaceItem;
 
 - (void)_requestActiveNowPlayingSessionInfo:(void(^)(BOOL, BOOL, NSString*, double, double, NSInteger, NSUInteger))callback;
+- (void)_requestActiveNowPlayingSessionInfoWithPlayback:(void(^)(BOOL, BOOL, BOOL, NSString *, NSString *, double, double, double, NSInteger, NSUInteger))callback;
 - (void)_setNowPlayingMetadataObserver:(void(^)(_WKNowPlayingMetadata *))observer;
 
 - (void)_doAfterNextPresentationUpdateWithoutWaitingForAnimatedResizeForTesting:(void (^)(void))updateBlock;
