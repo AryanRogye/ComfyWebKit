@@ -1719,11 +1719,6 @@ framework module WebKit_Private [system] {
     export *
   }
 
-  explicit module _WKContextMenuElementInfo {
-    header "_WKContextMenuElementInfo.h"
-    export *
-  }
-
   explicit module _WKCustomHeaderFields {
     header "_WKCustomHeaderFields.h"
     export *
@@ -1791,11 +1786,6 @@ framework module WebKit_Private [system] {
 
   explicit module _WKGeolocationPosition {
     header "_WKGeolocationPosition.h"
-    export *
-  }
-
-  explicit module _WKHitTestResult {
-    header "_WKHitTestResult.h"
     export *
   }
 

@@ -27,11 +27,6 @@ import Foundation
 import WebKit_Private
 import WebKit_Internal
 
-#if WTF_PLATFORM_MAC
-@_spiOnly import WebKit_Private._WKContextMenuElementInfo
-@_spiOnly import WebKit_Private._WKHitTestResult
-#endif
-
 private struct DefaultDialogPresenting: WebPage.DialogPresenting {
 }
 

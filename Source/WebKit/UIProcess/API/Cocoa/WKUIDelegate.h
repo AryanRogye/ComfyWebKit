@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class WKWebView;
 @class WKWebViewConfiguration;
 @class WKWindowFeatures;
+@class _WKContextMenuElementInfo;
 
 #if TARGET_OS_IOS || (defined(TARGET_OS_VISION) && TARGET_OS_VISION)
 @class WKContextMenuElementInfo;
@@ -81,6 +82,10 @@ WK_SWIFT_UI_ACTOR
 @protocol WKUIDelegate <NSObject>
 
 @optional
+
+#if TARGET_OS_OSX
+- (void)_webView:(WKWebView * _Null_unspecified)webView getContextMenuFromProposedMenu:(NSMenu * _Null_unspecified)menu forElement:(_WKContextMenuElementInfo * _Null_unspecified)element userInfo:(id<NSSecureCoding> _Null_unspecified)userInfo completionHandler:(void (^ _Null_unspecified)(NSMenu * _Null_unspecified))completionHandler WK_API_AVAILABLE(macos(10.14));
+#endif
 
 /*! @abstract Creates a new web view.
  @param webView The web view invoking the delegate method.

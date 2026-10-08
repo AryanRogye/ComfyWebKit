@@ -39,6 +39,10 @@
 #import <WebKit/WKFindResult.h>
 #import <WebKit/WKFormInfo.h>
 #import <WebKit/WKFoundation.h>
+#if TARGET_OS_OSX
+#import <WebKit/_WKHitTestResult.h>
+#import <WebKit/_WKContextMenuElementInfo.h>
+#endif
 #import <WebKit/WKFrameInfo.h>
 #import <WebKit/WKHTTPCookieStore.h>
 #import <WebKit/WKImmersiveEnvironment.h>

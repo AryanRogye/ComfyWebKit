@@ -384,7 +384,7 @@
 		1A4D664C18A3030E00D82E21 /* WKFrameInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A4D664A18A3030E00D82E21 /* WKFrameInfo.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A52C0F81A38CDC70016160A /* WebStorageNamespaceProvider.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A52C0F61A38CDC70016160A /* WebStorageNamespaceProvider.h */; };
 		1A53C2AA1A325730004E8C70 /* WebsiteDataStore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A53C2A51A32569F004E8C70 /* WebsiteDataStore.h */; };
-		1A5704F81BE01FF400874AF1 /* _WKContextMenuElementInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704F61BE01FF400874AF1 /* _WKContextMenuElementInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		1A5704F81BE01FF400874AF1 /* _WKContextMenuElementInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704F61BE01FF400874AF1 /* _WKContextMenuElementInfo.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		1A5704FC1BE1751100874AF1 /* RemoteObjectInvocation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704FA1BE1751100874AF1 /* RemoteObjectInvocation.h */; };
 		1A5705111BE410E600874AF1 /* BlockSPI.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5705101BE410E500874AF1 /* BlockSPI.h */; };
 		1A57109F1ABA0027002FABBE /* WKWebsiteDataStoreRef.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A57109D1ABA0027002FABBE /* WKWebsiteDataStoreRef.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1927,7 +1927,7 @@
 		93D6B7B4255268D50058DD3A /* SpeechRecognitionPermissionRequest.h in Headers */ = {isa = PBXBuildFile; fileRef = 93D6B7AF255268A10058DD3A /* SpeechRecognitionPermissionRequest.h */; };
 		93D6B7B5255268D70058DD3A /* SpeechRecognitionPermissionManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 93D6B7B2255268A20058DD3A /* SpeechRecognitionPermissionManager.h */; };
 		93E05E40282CD560000B69EB /* ProcessStateMonitor.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E05E3E282CD55D000B69EB /* ProcessStateMonitor.h */; };
-		93E6A4EE1BC5DD3900F8A0E7 /* _WKHitTestResult.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E6A4ED1BC5DD3900F8A0E7 /* _WKHitTestResult.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		93E6A4EE1BC5DD3900F8A0E7 /* _WKHitTestResult.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E6A4ED1BC5DD3900F8A0E7 /* _WKHitTestResult.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		93E799882756FAC20074008A /* WebFileSystemStorageConnectionMessages.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799812756FA530074008A /* WebFileSystemStorageConnectionMessages.h */; };
 		93E799C7276027460074008A /* StorageAreaRegistry.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799C6276027370074008A /* StorageAreaRegistry.h */; };
 		93E799CE2760497B0074008A /* SessionStorageManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799CA2760497A0074008A /* SessionStorageManager.h */; };
