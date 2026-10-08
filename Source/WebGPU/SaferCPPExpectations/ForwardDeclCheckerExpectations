@@ -1,0 +1,4 @@
+WGSL/AST/ASTStringDumper.h
+WGSL/CallGraph.h
+WGSL/Types.h
+WGSL/WGSL.h

@@ -1,0 +1,5 @@
+bindings/js/ScriptControllerMac.mm
+platform/graphics/cg/GraphicsContextCG.cpp
+platform/graphics/cg/PathCG.cpp
+rendering/AttachmentLayout.mm
+[ iOS ] rendering/ios/RenderThemeIOS.mm
