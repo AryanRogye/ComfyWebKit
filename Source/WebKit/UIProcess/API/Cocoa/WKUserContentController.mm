@@ -24,6 +24,9 @@
  */
 
 #import "config.h"
+#include <objc/NSObjCRuntime.h>
+#include "UIProcess/API/Cocoa/WKUserScript.h"
+#include <Foundation/Foundation.h>
 #import "WKUserContentControllerInternal.h"
 
 #import "APIContentWorld.h"
@@ -107,6 +110,24 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 - (void)removeAllUserScripts
 {
     protect(*_userContentControllerProxy)->removeAllUserScripts();
+}
+
+- (void)removeUserScript:(WKUserScript *)userScript
+{
+    NSArray<WKUserScript *> *scripts = [self userScripts];
+
+    NSMutableArray<WKUserScript *> *scriptsToAddBack = [NSMutableArray array];
+
+    for (NSUInteger i = 0; i < scripts.count; i++) {
+        if (userScript != scripts[i]) {
+            [scriptsToAddBack addObject:scripts[i]];
+        }
+    }
+
+    [self removeAllUserScripts];
+    for (NSUInteger i = 0; i < scriptsToAddBack.count; i++) {
+        [self addUserScript:scriptsToAddBack[i]];
+    }
 }
 
 - (void)addContentRuleList:(WKContentRuleList *)contentRuleList

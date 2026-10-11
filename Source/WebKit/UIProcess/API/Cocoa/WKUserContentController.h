@@ -58,6 +58,10 @@ WK_CLASS_AVAILABLE(macos(10.10), ios(8.0))
 */
 - (void)removeAllUserScripts;
 
+- (void)removeUserScript:(WKUserScript *)userScript;
+
+// we wanna add something new here
+
 /*! @abstract Adds a script message handler.
  @param scriptMessageHandler The script message handler to add.
  @param contentWorld The WKContentWorld in which to add the script message handler.
