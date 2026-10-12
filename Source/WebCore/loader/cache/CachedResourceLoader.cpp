@@ -1233,6 +1233,8 @@ ResourceErrorOr<Ref<CachedResource>> CachedResourceLoader::requestResource(Cache
             request.applyResults(WTF::move(results), page.ptr());
             if (shouldBlock) {
                 CACHEDRESOURCELOADER_RELEASE_LOG_WITH_FRAME("requestResource: Resource blocked by content blocker", frame.get());
+                String urlStr = resourceRequest.url().string();
+                page->chrome().client().didJustBlock(urlStr);
                 page->chrome().client().contentRuleListDidBlockLoad({ frame->frameID(), resourceRequest.url(), resourceRequest.httpMethod(), resourceType, WTF::move(blockingIdentifiers) });
                 if (type == CachedResource::Type::MainResource) {
                     auto resource = createResource(type, WTF::move(request), page->sessionID(), protect(page->cookieJar()).ptr(), page->settings(), document.get());
@@ -1634,7 +1636,7 @@ CachedResourceLoader::RevalidationPolicy CachedResourceLoader::determineRevalida
         LOG(ResourceLoading, "CachedResourceLoader::determineRevalidationPolicy reloading due to CachePolicyReload.");
         return Reload;
     }
-    
+
     // We'll try to reload the resource if it failed last time.
     if (existingResource->errorOccurred()) {
         LOG(ResourceLoading, "CachedResourceLoader::determineRevalidationPolicye reloading due to resource being in the error state");
@@ -1866,7 +1868,7 @@ Vector<Ref<SVGImage>> CachedResourceLoader::allCachedSVGImages() const
         if (RefPtr image = cachedResourceSVGImage(resource.get()))
             allCachedSVGImages.append(image.releaseNonNull());
     }
-        
+
     return allCachedSVGImages;
 }
 

@@ -12013,6 +12013,12 @@ void WebPageProxy::requestFrameScreenPosition(FrameIdentifier frameID)
     });
 }
 
+void WebPageProxy::didJustBlock(String&& url)
+{
+    Ref<API::String> toSendUrl = API::String::create(WTF::move(url));
+    m_navigationClient->didJustBlock(*this, toSendUrl);
+}
+
 void WebPageProxy::applyAccessibilityFrameScreenPosition(FrameIdentifier frameID, const FloatRect& mainFrameViewRect)
 {
     static constexpr float unitRectSize = 1000;

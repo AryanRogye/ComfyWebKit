@@ -41,6 +41,20 @@ Unlike `removeAllUserScripts()`, this method preserves the remaining registered 
 
 Implementation note: The current implementation removes all registered scripts internally, then re-adds every script except the specified one. It does not undo JavaScript that has already executed in existing pages.
 
+### Content blocking notifications
+
+`WKNavigationDelegate` exposes the optional `webView:didJustBlock:blockedURL:` delegate method, allowing applications to receive notifications when a URL is blocked by a registered content rule list.
+
+The `blockedURL` parameter identifies the URL that triggered the blocking rule, enabling applications to monitor blocked requests, display blocking statistics, or provide feedback to users.
+
+**Usage:**
+
+```swift
+func webView(_ webView: WKWebView, didJustBlock blockedURL: URL) {
+    print("Blocked URL: \(blockedURL)")
+}
+```
+
 ## Getting the source
 
 ```sh

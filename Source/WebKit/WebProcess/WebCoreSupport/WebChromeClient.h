@@ -75,15 +75,17 @@ public:
 private:
     bool isWebChromeClient() const final { return true; }
     void chromeDestroyed() final;
-    
+
     void setWindowRect(const WebCore::FloatRect&) final;
     WebCore::FloatRect windowRect() const final;
-    
+
     WebCore::FloatRect pageRect() const final;
-    
+
     void focus() final;
     void unfocus() final;
-    
+
+    void didJustBlock(String&) override;
+
     bool canTakeFocus(WebCore::FocusDirection) const final;
     void takeFocus(WebCore::FocusDirection) final;
 
@@ -96,21 +98,21 @@ private:
     // created Page has its show method called.
     RefPtr<WebCore::Page> createWindow(WebCore::LocalFrame&, const String& openedMainFrameName, const WebCore::WindowFeatures&, const WebCore::NavigationAction&) final;
     void show() final;
-    
+
     bool canRunModal() const final;
     void runModal() final;
 
     void reportProcessCPUTime(Seconds, WebCore::ActivityStateForCPUSampling) final;
 
     bool isPopup() const final;
-    
+
     void setResizable(bool) final;
-    
+
     void addMessageToConsole(JSC::MessageSource, JSC::MessageLevel, const String& message, unsigned lineNumber, unsigned columnNumber, const String& sourceID) final;
-    
+
     bool canRunBeforeUnloadConfirmPanel() final;
     bool runBeforeUnloadConfirmPanel(String&& message, WebCore::LocalFrame&) final;
-    
+
     void closeWindow() final;
 
     void rootFrameAdded(const WebCore::LocalFrame&) final;
@@ -418,7 +420,7 @@ private:
 #if ENABLE(APP_HIGHLIGHTS)
     WebCore::HighlightVisibility appHighlightsVisiblility() const final;
 #endif
-    
+
     void wheelEventHandlersChanged(bool) final;
 
     void didAddHeaderLayer(WebCore::GraphicsLayer&) final;
@@ -454,7 +456,7 @@ private:
     void handleSelectionServiceClick(WebCore::FrameIdentifier, WebCore::FrameSelection&, const Vector<String>& telephoneNumbers, const WebCore::IntPoint&) final;
     bool hasRelevantSelectionServices(bool isTextOnly) const final;
     void handleImageServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::Image&, WebCore::HTMLImageElement&) final;
-    void handlePDFServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&);
+    void handlePDFServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&) override;
 #endif
 
     bool shouldDispatchFakeMouseMoveEvents() const final;
@@ -555,7 +557,7 @@ private:
     void beginSystemPreview(const URL&, const WebCore::SecurityOriginData& topOrigin, const WebCore::SystemPreviewInfo&, CompletionHandler<void()>&&) final;
 #endif
 
-    bool isUsingUISideCompositing() const;
+    bool isUsingUISideCompositing() const override;
 
     bool isInStableState() const final;
 
@@ -582,7 +584,7 @@ private:
 
     void addDestinationTextAnimationForActiveWritingToolsSession(Markable<WTF::UUID> sourceAnimationUUID, Markable<WTF::UUID> destinationAnimationUUID, const std::optional<WebCore::CharacterRange>&, const String&) final;
 
-    void saveSnapshotOfTextPlaceholderForAnimation(const WebCore::SimpleRange&);
+    void saveSnapshotOfTextPlaceholderForAnimation(const WebCore::SimpleRange&) override;
 
     void clearAnimationsForActiveWritingToolsSession() final;
 

@@ -293,6 +293,13 @@ void WebChromeClient::focus()
     }
 }
 
+void WebChromeClient::didJustBlock(String& url)
+{
+    if (RefPtr page = m_page.get()) {
+        page->send(Messages::WebPageProxy::DidJustBlock(url));
+    }
+}
+
 void WebChromeClient::unfocus()
 {
     if (RefPtr page = m_page.get())
@@ -343,7 +350,7 @@ void WebChromeClient::assistiveTechnologyMakeFirstResponder()
         page->send(Messages::WebPageProxy::AssistiveTechnologyMakeFirstResponder());
 }
 
-#endif    
+#endif
 
 bool WebChromeClient::canTakeFocus(FocusDirection) const
 {
@@ -999,7 +1006,7 @@ bool WebChromeClient::shouldUnavailablePluginMessageBeButton(PluginUnavailabilit
     ASSERT_NOT_REACHED();
     return false;
 }
-    
+
 void WebChromeClient::unavailablePluginButtonClicked(Element& element, PluginUnavailabilityReason pluginUnavailabilityReason) const
 {
     UNUSED_PARAM(element);
@@ -1100,7 +1107,7 @@ void WebChromeClient::transcodeChosenFiles(Vector<String>&& transcodingPaths, St
 
     page->sendWithAsyncReply(Messages::WebPageProxy::TranscodeChosenFiles(transcodingPaths, destinationUTI, destinationExtension), WTF::move(completion));
 }
-    
+
 void WebChromeClient::showShareSheet(ShareDataWithParsedURL&& shareData, CompletionHandler<void(bool)>&& callback)
 {
     if (RefPtr page = m_page.get())

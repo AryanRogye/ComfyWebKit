@@ -24,6 +24,8 @@
  */
 
 #import "config.h"
+#include "UIProcess/WebsiteData/WebsiteDataStore.h"
+#include "UIProcess/API/Cocoa/WKWebsiteDataStore.h"
 #import "WKWebsiteDataStoreInternal.h"
 
 #import "APIString.h"
@@ -401,6 +403,12 @@ private:
 
 WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 
++ (void)setTrackingPreventionEnabled:(BOOL)enabled
+{
+    auto& store = WebKit::WebsiteDataStore::defaultDataStore();
+    store.setTrackingPreventionEnabled(enabled);
+}
+
 + (WKWebsiteDataStore *)defaultDataStore
 {
     return wrapper(WebKit::WebsiteDataStore::defaultDataStore());
@@ -415,7 +423,7 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
 {
     if (linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::WKWebsiteDataStoreInitReturningNil))
         [NSException raise:NSGenericException format:@"Calling [WKWebsiteDataStore init] is not supported."];
-    
+
     if (!(self = [super init]))
         return nil;
 
@@ -973,7 +981,7 @@ struct WKWebsiteData {
         completionHandler(nil);
         return;
     }
-    
+
     page->getLoadedSubresourceDomains([completionHandler = makeBlockPtr(completionHandler)] (Vector<WebCore::RegistrableDomain>&& loadedSubresourceDomains) {
         Vector<RefPtr<API::Object>> apiDomains = WTF::map(loadedSubresourceDomains, [](auto& domain) -> RefPtr<API::Object> {
             return API::String::create(String(domain.string()));

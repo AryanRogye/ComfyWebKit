@@ -821,6 +821,7 @@ public:
 
     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess(IPC::Connection&) const;
 
+    void didJustBlock(String&&);
     void addPreviouslyVisitedPath(const String&);
 
     bool isLockdownModeExplicitlySet() const { return m_isLockdownModeExplicitlySet; }
@@ -840,7 +841,7 @@ public:
     void detectDataInAllFrames(OptionSet<WebCore::DataDetectorType>, CompletionHandler<void(DataDetectionResult&&)>&&);
     void removeDataDetectedLinks(CompletionHandler<void(DataDetectionResult&&)>&&);
 #endif
-        
+
 #if PLATFORM(COCOA)
     RemoteScrollingCoordinatorProxy* scrollingCoordinatorProxy() const { return m_scrollingCoordinatorProxy.get(); }
 #endif
@@ -992,7 +993,7 @@ public:
     WeakPtr<SecKeyProxyStore> secKeyProxyStore(const WebCore::AuthenticationChallenge&);
 
     void makeViewBlankIfUnpaintedSinceLastLoadCommit();
-        
+
     void close();
     bool tryClose();
     bool isClosed() const { return m_isClosed; }
@@ -1130,7 +1131,7 @@ public:
     void viewWillEndLiveResize();
 
     void setInitialFocus(bool forward, bool isKeyboardEventValid, RefPtr<WebKeyboardEvent>&&, CompletionHandler<void()>&&);
-    
+
     void clearSelection(std::optional<WebCore::FrameIdentifier> = std::nullopt);
     void restoreSelectionInFocusedEditableElement();
 
@@ -1221,7 +1222,7 @@ public:
 
     WebCore::FloatRect updateVisibleContentRectsAndAdjustLayers(const VisibleContentRectUpdateInfo&, bool sendEvenIfUnchanged);
 #endif
-        
+
     void adjustLayersForLayoutViewport(const WebCore::FloatPoint& scrollPosition, const WebCore::FloatRect& layoutViewport, double scale);
 
     void stickyScrollingTreeNodeBeganSticking();
@@ -1405,7 +1406,7 @@ public:
 
     void setInputMethodState(std::optional<InputMethodState>&&);
 #endif
-        
+
     void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin);
     void scrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin);
     void setContentOffset(std::optional<int> x, std::optional<int> y, WebCore::ScrollIsAnimated);
@@ -1638,7 +1639,7 @@ public:
     double viewScaleFactor() const { return m_viewScaleFactor; }
     void scaleView(double scale);
     void setShouldScaleViewToFitDocument(bool);
-    
+
     float NODELETE deviceScaleFactor() const;
 #if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
     float intrinsicDeviceScaleFactor() const { return m_intrinsicDeviceScaleFactor; }
@@ -1710,12 +1711,12 @@ public:
 
     void setShouldUseImplicitRubberBandControl(bool shouldUseImplicitRubberBandControl) { m_shouldUseImplicitRubberBandControl = shouldUseImplicitRubberBandControl; }
     bool shouldUseImplicitRubberBandControl() const { return m_shouldUseImplicitRubberBandControl; }
-        
+
     void setEnableVerticalRubberBanding(bool);
     bool NODELETE verticalRubberBandingIsEnabled() const;
     void setEnableHorizontalRubberBanding(bool);
     bool NODELETE horizontalRubberBandingIsEnabled() const;
-        
+
     void setBackgroundExtendsBeyondPage(bool);
     bool NODELETE backgroundExtendsBeyondPage() const;
 
@@ -1852,7 +1853,7 @@ public:
 
     void backForwardRemovedItem(WebCore::BackForwardFrameItemIdentifier);
 
-#if ENABLE(DRAG_SUPPORT)    
+#if ENABLE(DRAG_SUPPORT)
     // Drag and drop support.
     void dragEntered(WebCore::DragData&, const String& dragStorageName = String());
     void dragUpdated(WebCore::DragData&, const String& dragStorageName = String());
@@ -2159,7 +2160,7 @@ public:
     void didApplyLinkDecorationFiltering(const URL&, const URL&);
 
     SpellDocumentTag spellDocumentTag();
-        
+
     void setScrollPinningBehavior(WebCore::ScrollPinningBehavior);
     WebCore::ScrollPinningBehavior NODELETE scrollPinningBehavior() const;
 
@@ -2581,7 +2582,7 @@ public:
 
     void disableServiceWorkerEntitlementInNetworkProcess();
     void clearServiceWorkerEntitlementOverride(CompletionHandler<void()>&&);
-        
+
 #if PLATFORM(COCOA)
     std::optional<IPC::AsyncReplyID> grantAccessToCurrentPasteboardData(const String& pasteboardName, CompletionHandler<void()>&&, std::optional<WebCore::FrameIdentifier> = std::nullopt);
 #endif
@@ -3721,7 +3722,7 @@ private:
 
     void tryCloseTimedOut();
     void makeStorageSpaceRequest(WebCore::FrameIdentifier, const String& originIdentifier, const String& databaseName, const String& displayName, uint64_t currentQuota, uint64_t currentOriginUsage, uint64_t currentDatabaseUsage, uint64_t expectedUsage, CompletionHandler<void(uint64_t)>&&);
-        
+
 #if ENABLE(APP_BOUND_DOMAINS)
     bool setIsNavigatingToAppBoundDomainAndCheckIfPermitted(bool isMainFrame, const URL&, std::optional<NavigatingToAppBoundDomain>);
 #endif
@@ -3738,7 +3739,7 @@ private:
 #if ENABLE(IMAGE_ANALYSIS) && PLATFORM(MAC)
     void showImageInQuickLookPreviewPanel(WebCore::ShareableBitmap& imageBitmap, const String& tooltip, const URL& imageURL, QuickLookPreviewActivity);
 #endif
-        
+
 #if ENABLE(APP_HIGHLIGHTS)
     void setUpHighlightsObserver();
 #endif
@@ -4214,7 +4215,7 @@ private:
     bool m_canShortCircuitHorizontalWheelEvents { true };
 
     bool m_shouldUseImplicitRubberBandControl { false };
-        
+
     bool m_enableVerticalRubberBanding { true };
     bool m_enableHorizontalRubberBanding { true };
 
@@ -4361,7 +4362,7 @@ private:
     bool m_sessionStateWasRestoredByAPIRequest { false };
     bool m_isQuotaIncreaseDenied { false };
     bool m_isLayerTreeFrozenDueToSwipeAnimation { false };
-    
+
     String m_overriddenMediaType;
 
     Vector<String> m_corsDisablingPatterns;
@@ -4371,7 +4372,7 @@ private:
         RefPtr<API::Object> messageBody;
     };
     Vector<InjectedBundleMessage> m_pendingInjectedBundleMessages;
-        
+
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
     RefPtr<WebDeviceOrientationUpdateProviderProxy> m_webDeviceOrientationUpdateProviderProxy;
 #endif

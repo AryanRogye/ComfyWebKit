@@ -79,6 +79,7 @@ class NavigationClient {
 public:
     virtual ~NavigationClient() { }
 
+    virtual void didJustBlock(WebKit::WebPageProxy&, Ref<API::String>&) { };
     virtual void didStartProvisionalNavigation(WebKit::WebPageProxy&, const WebCore::ResourceRequest&, Navigation*, Object*) { }
     virtual void didStartProvisionalLoadForFrame(WebKit::WebPageProxy&, WebCore::ResourceRequest&&, WebKit::FrameInfoData&&) { }
     virtual void didReceiveServerRedirectForProvisionalNavigation(WebKit::WebPageProxy&, Navigation*, Object*) { }

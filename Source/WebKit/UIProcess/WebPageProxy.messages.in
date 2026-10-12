@@ -28,6 +28,7 @@ Copyright (C) 2010-2024 Apple Inc. All rights reserved.
 ]
 messages -> WebPageProxy {
     # UI messages
+    DidJustBlock(String url)
     CreateNewPage(struct WebCore::WindowFeatures windowFeatures, struct WebKit::NavigationActionData navigationActionData) -> (std::optional<WebCore::PageIdentifier> newPageID, std::optional<WebKit::WebPageCreationParameters> newPageParameters) Synchronous
     ShowPage()
     ClosePage()
@@ -541,7 +542,7 @@ messages -> WebPageProxy {
     FixedLayoutSizeDidChange(WebCore::IntSize fixedLayoutSize)
 
     DidRestoreScrollPosition()
-    
+
     RequestScrollToRect(WebCore::FloatRect targetRect, WebCore::FloatPoint origin)
 
     GetLoadDecisionForIcons(HashMap<WebKit::CallbackID, WebCore::LinkIcon> icons)

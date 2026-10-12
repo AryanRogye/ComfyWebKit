@@ -135,6 +135,12 @@ WK_SWIFT_UI_ACTOR
  */
 - (void)webView:(WKWebView *)webView didCommitNavigation:(null_unspecified WKNavigation *)navigation;
 
+/*! @abstract Invoked when content blocking is performed
+ @param webView The web view invoking the delegate method.
+ @param blockedURL The url that was blocked
+*/
+- (void)webView:(WKWebView *)webView didJustBlock:(NSURL *)blockedURL;
+
 /*! @abstract Invoked when a main frame navigation completes.
  @param webView The web view invoking the delegate method.
  @param navigation The navigation.

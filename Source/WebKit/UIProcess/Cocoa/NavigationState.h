@@ -107,6 +107,7 @@ private:
 
     private:
 
+        void didJustBlock(WebPageProxy&, Ref<API::String>&) override;
         void didStartProvisionalNavigation(WebPageProxy&, const WebCore::ResourceRequest&, API::Navigation*, API::Object*) override;
         void didStartProvisionalLoadForFrame(WebPageProxy&, WebCore::ResourceRequest&&, FrameInfoData&&) override;
         void didReceiveServerRedirectForProvisionalNavigation(WebPageProxy&, API::Navigation*, API::Object*) override;
@@ -165,19 +166,19 @@ private:
 
         WeakPtr<NavigationState> m_navigationState;
     };
-    
+
     class HistoryClient final : public API::HistoryClient {
         WTF_MAKE_TZONE_ALLOCATED(HistoryClient);
     public:
         explicit HistoryClient(NavigationState&);
         ~HistoryClient();
-        
+
     private:
         void didNavigateWithNavigationData(WebPageProxy&, const WebNavigationDataStore&) override;
         void didPerformClientRedirect(WebPageProxy&, const WTF::String&, const WTF::String&) override;
         void didPerformServerRedirect(WebPageProxy&, const WTF::String&, const WTF::String&) override;
         void didUpdateHistoryTitle(WebPageProxy&, const WTF::String&, const WTF::String&) override;
-        
+
         WeakPtr<NavigationState> m_navigationState;
     };
 
@@ -220,6 +221,7 @@ private:
     WeakObjCPtr<id<WKNavigationDelegate>> m_navigationDelegate;
 
     struct {
+        bool webViewDidJustBlock: 1;
         bool webViewDecidePolicyForNavigationActionDecisionHandler : 1;
         bool webViewDecidePolicyForNavigationActionWithPreferencesDecisionHandler : 1;
         bool webViewDecidePolicyForNavigationActionWithPreferencesUserInfoDecisionHandler : 1;

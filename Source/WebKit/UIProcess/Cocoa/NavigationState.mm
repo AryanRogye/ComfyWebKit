@@ -24,6 +24,8 @@
  */
 
 #import "config.h"
+#include <objc/NSObjCRuntime.h>
+#include <Foundation/Foundation.h>
 #import "NavigationState.h"
 
 #import "APIContentRuleListAction.h"
@@ -168,7 +170,7 @@ UniqueRef<API::NavigationClient> NavigationState::createNavigationClient()
 {
     return makeUniqueRef<NavigationClient>(*this);
 }
-    
+
 UniqueRef<API::HistoryClient> NavigationState::createHistoryClient()
 {
     return makeUniqueRef<HistoryClient>(*this);
@@ -183,6 +185,7 @@ void NavigationState::setNavigationDelegate(id<WKNavigationDelegate> delegate)
 {
     m_navigationDelegate = delegate;
 
+    m_navigationDelegateMethods.webViewDidJustBlock = [delegate respondsToSelector:@selector(webView:didJustBlock:)];
     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionDecisionHandler = [delegate respondsToSelector:@selector(webView:decidePolicyForNavigationAction:decisionHandler:)];
     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesDecisionHandler = [delegate respondsToSelector:@selector(webView:decidePolicyForNavigationAction:preferences:decisionHandler:)];
     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesUserInfoDecisionHandler = [delegate respondsToSelector:@selector(_webView:decidePolicyForNavigationAction:preferences:userInfo:decisionHandler:)];
@@ -203,7 +206,7 @@ void NavigationState::setNavigationDelegate(id<WKNavigationDelegate> delegate)
     m_navigationDelegateMethods.webViewDidFailLoadDueToNetworkConnectionIntegrityWithURL = [delegate respondsToSelector:@selector(_webView:didFailLoadDueToNetworkConnectionIntegrityWithURL:)];
     m_navigationDelegateMethods.webViewDidChangeLookalikeCharactersFromURLToURL = [delegate respondsToSelector:@selector(_webView:didChangeLookalikeCharactersFromURL:toURL:)];
     m_navigationDelegateMethods.webViewDidPromptForStorageAccessForSubFrameDomainForQuirk = [delegate respondsToSelector:@selector(_webView:didPromptForStorageAccess:forSubFrameDomain:forQuirk:)];
-    
+
     m_navigationDelegateMethods.webViewNavigationDidFailProvisionalLoadInSubframeWithError = [delegate respondsToSelector:@selector(_webView:navigation:didFailProvisionalLoadInSubframe:withError:)];
     m_navigationDelegateMethods.webViewWillPerformClientRedirect = [delegate respondsToSelector:@selector(_webView:willPerformClientRedirectToURL:delay:)];
     m_navigationDelegateMethods.webViewDidPerformClientRedirect = [delegate respondsToSelector:@selector(_webView:didPerformClientRedirectFromURL:toURL:)];
@@ -801,7 +804,7 @@ void NavigationState::NavigationClient::contentRuleListMatchedRule(WebPageProxy&
 #endif
 }
 #endif
-    
+
 void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPageProxy& page, Ref<API::NavigationResponse>&& navigationResponse, Ref<WebFramePolicyListenerProxy>&& listener)
 {
     RefPtr navigationState = m_navigationState.get();
@@ -852,6 +855,26 @@ void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPag
             }
         });
     }).get()];
+}
+
+void NavigationState::NavigationClient::didJustBlock(WebKit::WebPageProxy&, Ref<API::String>& url)
+{
+    RefPtr navigationState = m_navigationState.get();
+    if (!navigationState)
+        return;
+
+    auto navigationDelegate = navigationState->navigationDelegate();
+    if (!navigationDelegate)
+        return;
+
+    if (navigationState->m_navigationDelegateMethods.webViewDidJustBlock) {
+
+        NSURL *nsURL = [NSURL URLWithString:url->string().createNSString().autorelease()];
+        if (!nsURL)
+            return;
+
+        [navigationDelegate webView:navigationState->webView().get() didJustBlock:(nsURL)];
+    }
 }
 
 void NavigationState::NavigationClient::didStartProvisionalNavigation(WebPageProxy&, const WebCore::ResourceRequest& request, API::Navigation* navigation, API::Object* userInfo)
@@ -1101,7 +1124,7 @@ void NavigationState::NavigationClient::didApplyLinkDecorationFiltering(WebPageP
     RefPtr navigationState = m_navigationState.get();
     if (!m_navigationState)
         return;
-    
+
     auto navigationDelegate = navigationState->navigationDelegate();
     if (!navigationDelegate)
         return;
@@ -1533,7 +1556,7 @@ void NavigationState::NavigationClient::decidePolicyForSOAuthorizationLoad(WebPa
 #endif
 
 // HistoryDelegatePrivate support
-    
+
 NavigationState::HistoryClient::HistoryClient(NavigationState& navigationState)
     : m_navigationState(navigationState)
 {
