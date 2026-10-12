@@ -40,7 +40,7 @@
 #include <wtf/text/WTFString.h>
 
 namespace WebCore::ContentExtensions {
-    
+
 static bool NODELETE containsOnlyASCIIWithNoUppercase(const String& domain)
 {
     for (auto character : StringView { domain }.codeUnits()) {
@@ -49,7 +49,7 @@ static bool NODELETE containsOnlyASCIIWithNoUppercase(const String& domain)
     }
     return true;
 }
-    
+
 static std::expected<Vector<String>, std::error_code> getStringList(const JSON::Array& array)
 {
     Vector<String> strings;
@@ -68,7 +68,7 @@ static std::expected<Vector<String>, std::error_code> getDomainList(const JSON::
     auto domains = getStringList(arrayObject);
     if (!domains)
         return domains;
-    
+
     Vector<String> regexes;
     regexes.reserveInitialCapacity(domains->size());
     for (auto& domain : *domains) {
@@ -117,7 +117,7 @@ static std::error_code getTypeFlags(const JSON::Array& array, ResourceFlags& fla
 
     return { };
 }
-    
+
 static std::expected<Trigger, std::error_code> loadTrigger(const JSON::Object& ruleObject)
 {
     auto triggerObject = ruleObject.getObject("trigger"_s);
@@ -330,7 +330,7 @@ static std::expected<Vector<ContentExtensionRule>, std::error_code> loadEncodedR
         return makeUnexpected(ContentExtensionError::JSONTopLevelStructureNotAnArray);
 
     Vector<ContentExtensionRule> ruleList;
-    constexpr size_t maxRuleCount = 150000;
+    constexpr size_t maxRuleCount = 250000;
     if (topLevelArray->length() > maxRuleCount)
         return makeUnexpected(ContentExtensionError::JSONTooManyRules);
     ruleList.reserveInitialCapacity(topLevelArray->length());
