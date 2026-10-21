@@ -1,0 +1,403 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 21 Oct 2026 15:23:32 -0500
+Subject: [PATCH] configuring cmake to expose headers to a xcode project
+
+---
+diff --git a/Source/JavaScriptCore/PlatformMac.cmake b/Source/JavaScriptCore/PlatformMac.cmake
+index 276f6eda318fa01f2eb5571a514d6a1d769523d8..fd1c58e8da1785d2ddb1bda4b90fdfcd8d7cffd3 100644
+--- a/Source/JavaScriptCore/PlatformMac.cmake
++++ b/Source/JavaScriptCore/PlatformMac.cmake
+@@ -13,3 +13,23 @@ list(APPEND JavaScriptCore_PUBLIC_FRAMEWORK_HEADERS
+     API/JSVirtualMachine.h
+     API/JavaScriptCore.h
+ )
++
++# WebKit's public legacy headers import JavaScriptCore. A sibling framework
++# without its own Headers directory shadows the SDK framework but cannot be
++# imported by an external client.
++set(_jsc_framework "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/JavaScriptCore.framework")
++file(MAKE_DIRECTORY "${_jsc_framework}/Versions/A/Headers" "${_jsc_framework}/Versions/A/Modules")
++file(CREATE_LINK "A" "${_jsc_framework}/Versions/Current" SYMBOLIC)
++foreach (_directory Headers Modules)
++    file(CREATE_LINK "Versions/Current/${_directory}" "${_jsc_framework}/${_directory}" SYMBOLIC)
++endforeach ()
++set(_jsc_client_headers ${JavaScriptCore_PUBLIC_FRAMEWORK_HEADERS})
++list(FILTER _jsc_client_headers EXCLUDE REGEX "(Private|JSCallbackFunction)\\.h$")
++WEBKIT_COPY_FILES(JavaScriptCore_StageFrameworkHeaders
++    DESTINATION "${_jsc_framework}/Versions/A/Headers"
++    FILES ${_jsc_client_headers}
++    FLATTENED NO_SYMLINK
++)
++configure_file("${JAVASCRIPTCORE_DIR}/JavaScriptCore.modulemap"
++    "${_jsc_framework}/Versions/A/Modules/module.modulemap" COPYONLY)
++add_dependencies(JavaScriptCore JavaScriptCore_StageFrameworkHeaders)
+diff --git a/Source/WebKit/PlatformMac.cmake b/Source/WebKit/PlatformMac.cmake
+index 33b454ef1265964f01e79524574d3975861469f4..bab5aaaeb826e9634cbde43bf5c1badfa518a2c3 100644
+--- a/Source/WebKit/PlatformMac.cmake
++++ b/Source/WebKit/PlatformMac.cmake
+@@ -41,6 +41,9 @@ list(APPEND WebKit_SOURCES
+ 
+     UIProcess/PDF/WKPDFHUDView.mm
+     ${WEBKIT_DIR}/Platform/cocoa/WKMaterialHostingSupport.swift
++    ${WEBKIT_DIR}/UIProcess/API/Cocoa/ObjectiveCBlockConversions.swift
++    ${WEBKIT_DIR}/UIProcess/API/Cocoa/WebKitSwiftOverlay.swift
++    ${WEBKIT_DIR}/UIProcess/API/Cocoa/WKWebsiteDataStore+SwiftOverlay.swift
+     ${WEBKIT_DIR}/UIProcess/PDF/WKPDFHUDView.swift
+ 
+     WebProcess/InjectedBundle/API/c/mac/WKBundlePageMac.mm
+@@ -93,7 +96,6 @@ list(APPEND WebKit_COMPILE_OPTIONS "$<$<COMPILE_LANGUAGE:Swift>:SHELL:-no-warnin
+ # project's prefix header has already defined ENABLE()/HAVE() values.
+ set(WebKit_SWIFT_CLANG_INCLUDE_DIRS
+     ${CMAKE_BINARY_DIR}
+-    ${WebKit_FRAMEWORK_HEADERS_DIR}
+     ${WebKit_DERIVED_SOURCES_DIR}
+     ${WebCore_PRIVATE_FRAMEWORK_HEADERS_DIR}
+     ${JavaScriptCore_FRAMEWORK_HEADERS_DIR}
+@@ -105,6 +107,23 @@ set(WebKit_SWIFT_CLANG_INCLUDE_DIRS
+     ${WebCore_Private_SWIFT_MODULEMAP_DIR}
+     ${WebKit_PRIVATE_INCLUDE_DIRECTORIES}
+ )
++list(REMOVE_ITEM WebKit_SWIFT_CLANG_INCLUDE_DIRS "${WebKit_FRAMEWORK_HEADERS_DIR}")
++
++# Public API imports must resolve through the framework module, not header maps
++# or the unmodularized forwarding directory (which assigns them to WebKit_Private).
++function(_webkit_mac_swift_framework_includes)
++    get_target_property(_includes WebKit INCLUDE_DIRECTORIES)
++    set(_filtered)
++    foreach (_include IN LISTS _includes)
++        if (_include STREQUAL WebKit_FRAMEWORK_HEADERS_DIR OR _include MATCHES "WebKit-(framework|project)-headers\\.hmap$")
++            list(APPEND _filtered "$<$<NOT:$<COMPILE_LANGUAGE:Swift>>:${_include}>")
++        else ()
++            list(APPEND _filtered "${_include}")
++        endif ()
++    endforeach ()
++    set_property(TARGET WebKit PROPERTY INCLUDE_DIRECTORIES "${_filtered}")
++endfunction()
++cmake_language(DEFER CALL _webkit_mac_swift_framework_includes)
+ 
+ # -Xcc -D/-f flags shared with PAL/WebGPU come from
+ # _WEBKIT_COMPUTE_SWIFT_SHARED_CLANG_FLAGS so all three targets land in the
+@@ -119,6 +138,7 @@ endforeach ()
+ # Turn on library evolution and emit the swift interface files.
+ target_compile_options(WebKit PRIVATE
+         "$<$<COMPILE_LANGUAGE:Swift>:-enable-library-evolution>"
++        "$<$<COMPILE_LANGUAGE:Swift>:-import-underlying-module>"
+         "$<$<COMPILE_LANGUAGE:Swift>:SHELL:-emit-module-interface-path ${CMAKE_BINARY_DIR}/Source/WebKit/WebKit.swiftinterface>"
+         "$<$<COMPILE_LANGUAGE:Swift>:SHELL:-emit-private-module-interface-path ${CMAKE_BINARY_DIR}/Source/WebKit/WebKit.private.swiftinterface>"
+ )
+@@ -176,6 +196,7 @@ list(APPEND WebKit_PUBLIC_FRAMEWORK_HEADERS
+     Shared/API/Cocoa/WKMain.h
+     Shared/API/Cocoa/WKRemoteObject.h
+     Shared/API/Cocoa/WKRemoteObjectCoder.h
++    Shared/API/Cocoa/WebKit.apinotes
+     Shared/API/Cocoa/WebKit.h
+     Shared/API/Cocoa/WebKitPrivate.h
+     Shared/API/Cocoa/_WKFrameHandle.h
+@@ -449,6 +470,10 @@ target_link_options(WebKit PRIVATE
+ )
+ add_dependencies(WebKit WebInspectorUIFramework)
+ 
++# Stage the Clang module before Swift compiles: -import-underlying-module needs
++# a complete framework, independently of the post-link Swift module staging.
++include(PlatformMacFrameworkHeaders.cmake)
++
+ # Stage WebKit's Swift module + module maps into the framework's Modules dir
+ 
+ file(MAKE_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/WebKit.framework")
+@@ -498,6 +523,10 @@ add_custom_command(
+         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${WEBKIT_DIR}/Modules/OSX.modulemap" "${_wk_modules_dir}/module.modulemap"
+         MAIN_DEPENDENCY "${WEBKIT_DIR}/Modules/OSX.modulemap"
+         VERBATIM)
++add_custom_target(WebKit_ClangModuleMap DEPENDS
++        "${_wk_modules_dir}/module.modulemap"
++        "${_wk_modules_dir}/module.private.modulemap")
++add_dependencies(WebKit_StageFrameworkHeaders WebKit_ClangModuleMap)
+ add_custom_command(
+         OUTPUT "${_wk_modules_dir}/module.private.modulemap"
+         COMMAND ${CMAKE_COMMAND} -E make_directory "${_wk_modules_dir}"
+@@ -515,11 +544,10 @@ add_custom_command(
+ 
+ add_custom_target(WebKit_StageModules ALL DEPENDS
+         ${_wk_swiftmodule_outputs}
+-        "${_wk_modules_dir}/module.modulemap"
+-        "${_wk_modules_dir}/module.private.modulemap"
+         "${_wk_modules_dir}/WebKit.swiftcrossimport/SwiftUI.swiftoverlay")
+ 
+ add_dependencies(WebKit_StageModules WebKit)
++add_dependencies(WebKit_StageModules WebKit_ClangModuleMap)
+ 
+ set(WebKit_OUTPUT_NAME WebKit)
+ 
+diff --git a/Source/WebKit/PlatformMacFrameworkHeaders.cmake b/Source/WebKit/PlatformMacFrameworkHeaders.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..3d873709b2d04eda8d5843610772f2f843c4f5e8
+--- /dev/null
++++ b/Source/WebKit/PlatformMacFrameworkHeaders.cmake
+@@ -0,0 +1,116 @@
++# Match Xcode's public/private header visibility rather than putting the whole
++# build-tree forwarding directory (which includes implementation headers) in the
++# public Clang module's umbrella directory.
++set(_wk_framework "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/WebKit.framework")
++set(_wk_framework_version "${_wk_framework}/Versions/A")
++file(MAKE_DIRECTORY "${_wk_framework_version}/Headers" "${_wk_framework_version}/PrivateHeaders")
++file(CREATE_LINK "A" "${_wk_framework}/Versions/Current" SYMBOLIC)
++foreach (_directory Headers PrivateHeaders)
++    file(CREATE_LINK "Versions/Current/${_directory}" "${_wk_framework}/${_directory}" SYMBOLIC)
++endforeach ()
++
++file(STRINGS "${WEBKIT_DIR}/WebKit.xcodeproj/project.pbxproj" _wk_public_entries
++    REGEX "in Headers.*ATTRIBUTES = \\(Public,")
++set(_wk_public_names)
++foreach (_entry IN LISTS _wk_public_entries)
++    string(REGEX MATCH "/\\* ([^*]+) in Headers \\*/" _match "${_entry}")
++    list(APPEND _wk_public_names "${CMAKE_MATCH_1}")
++endforeach ()
++set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
++    "${WEBKIT_DIR}/WebKit.xcodeproj/project.pbxproj"
++    "${WEBKIT_DIR}/Modules/OSX_Private.modulemap"
++    "${WEBKIT_DIR}/MigratedHeaders-output.xcfilelist")
++
++set(_wk_header_manifest "")
++set(_wk_header_inputs)
++set(_wk_header_outputs)
++foreach (_header IN LISTS WebKit_PUBLIC_FRAMEWORK_HEADERS WebKit_PRIVATE_FRAMEWORK_HEADERS)
++    cmake_path(ABSOLUTE_PATH _header BASE_DIRECTORY "${WEBKIT_DIR}" NORMALIZE OUTPUT_VARIABLE _source)
++    cmake_path(GET _header FILENAME _name)
++    if (_name IN_LIST _wk_public_names OR _name STREQUAL "WebKitLegacy.h")
++        set(_visibility Headers)
++    else ()
++        set(_visibility PrivateHeaders)
++    endif ()
++    set(_destination "${_wk_framework_version}/${_visibility}/${_name}")
++    string(APPEND _wk_header_manifest "copy|${_source}|${_destination}\n")
++    list(APPEND _wk_header_inputs "${_source}")
++    list(APPEND _wk_header_outputs "${_destination}")
++endforeach ()
++
++# Explicit private submodules must have headers even when the corresponding
++# implementation is not enabled on this platform.
++file(STRINGS "${WEBKIT_DIR}/Modules/OSX_Private.modulemap" _wk_private_module_headers REGEX "header \"")
++file(GLOB_RECURSE _wk_source_headers "${WEBKIT_DIR}/*.h")
++foreach (_entry IN LISTS _wk_private_module_headers)
++    string(REGEX MATCH "header \"([^\"]+)\"" _match "${_entry}")
++    set(_name "${CMAKE_MATCH_1}")
++    set(_destination "${_wk_framework_version}/PrivateHeaders/${_name}")
++    if (_destination IN_LIST _wk_header_outputs)
++        continue ()
++    endif ()
++    foreach (_source IN LISTS _wk_source_headers)
++        cmake_path(GET _source FILENAME _source_name)
++        if (_source_name STREQUAL _name)
++            string(APPEND _wk_header_manifest "copy|${_source}|${_destination}\n")
++            list(APPEND _wk_header_inputs "${_source}")
++            list(APPEND _wk_header_outputs "${_destination}")
++            break()
++        endif ()
++    endforeach ()
++endforeach ()
++
++# The Mac umbrella imports <WebKit/DOM.h>, <WebKit/WebView.h>, etc.
++# Migrate the legacy headers with the same WebCore import/export adjustments as
++# WebKitLegacy/scripts/migrate-header-rule, then forward from WebKit's bundle.
++get_property(_wk_legacy_sources GLOBAL PROPERTY WebKitLegacy_MAC_HEADER_SOURCES)
++set(_wk_legacy_framework "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/WebKitLegacy.framework")
++file(MAKE_DIRECTORY "${_wk_legacy_framework}/Versions/A/Headers")
++file(CREATE_LINK "A" "${_wk_legacy_framework}/Versions/Current" SYMBOLIC)
++file(CREATE_LINK "Versions/Current/Headers" "${_wk_legacy_framework}/Headers" SYMBOLIC)
++file(STRINGS "${WEBKIT_DIR}/MigratedHeaders-output.xcfilelist" _wk_migrated_outputs)
++foreach (_source IN LISTS _wk_legacy_sources)
++    # The legacy forwarding list still contains removed NPAPI headers.
++    if (NOT EXISTS "${_source}")
++        continue ()
++    endif ()
++    cmake_path(GET _source FILENAME _name)
++    set(_legacy_destination "${_wk_legacy_framework}/Versions/A/Headers/${_name}")
++    string(APPEND _wk_header_manifest "legacy|${_source}|${_legacy_destination}\n")
++    list(APPEND _wk_header_inputs "${_source}")
++    list(APPEND _wk_header_outputs "${_legacy_destination}")
++    foreach (_output IN LISTS _wk_migrated_outputs)
++        cmake_path(GET _output FILENAME _output_name)
++        if (_output_name STREQUAL _name)
++            if (_output MATCHES "PRIVATE_HEADERS_FOLDER_PATH")
++                set(_visibility PrivateHeaders)
++            else ()
++                set(_visibility Headers)
++            endif ()
++            set(_destination "${_wk_framework_version}/${_visibility}/${_name}")
++            string(APPEND _wk_header_manifest "forward|${_name}|${_destination}\n")
++            list(APPEND _wk_header_outputs "${_destination}")
++        endif ()
++    endforeach ()
++endforeach ()
++set(_wk_header_manifest_path "${CMAKE_CURRENT_BINARY_DIR}/MacFrameworkHeaders.txt")
++file(CONFIGURE OUTPUT "${_wk_header_manifest_path}" CONTENT "${_wk_header_manifest}" @ONLY)
++set(_wk_header_staging_script "${CMAKE_SOURCE_DIR}/Source/cmake/StageMacWebKitHeaders.cmake")
++list(REMOVE_DUPLICATES _wk_header_inputs)
++list(REMOVE_DUPLICATES _wk_header_outputs)
++add_custom_command(
++    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/MacFrameworkHeaders.stamp"
++    BYPRODUCTS ${_wk_header_outputs}
++    COMMAND ${CMAKE_COMMAND} -DMANIFEST=${_wk_header_manifest_path} -P "${_wk_header_staging_script}"
++    COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_BINARY_DIR}/MacFrameworkHeaders.stamp"
++    DEPENDS ${_wk_header_inputs} "${_wk_header_manifest_path}" "${_wk_header_staging_script}"
++    COMMENT "Staging macOS WebKit framework headers"
++    VERBATIM
++)
++add_custom_target(WebKit_StageFrameworkHeaders DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/MacFrameworkHeaders.stamp")
++add_dependencies(WebKit WebKit_StageFrameworkHeaders)
++add_dependencies(WebKit_StageFrameworkHeaders JavaScriptCore_StageFrameworkHeaders)
++# The standalone Swift-to-C++ header emission runs before the main framework
++# compilation, and also inherits -import-underlying-module.
++cmake_language(DEFER CALL add_dependencies WebKit_SwiftCxxHeader WebKit_StageFrameworkHeaders)
++cmake_language(DEFER CALL add_dependencies WebKit_SwiftGeneratedDeps WebKit_StageFrameworkHeaders)
+diff --git a/Source/WebKit/Shared/API/Cocoa/WebKitPrivate.h b/Source/WebKit/Shared/API/Cocoa/WebKitPrivate.h
+index 0e5d61c47ecacf219296054edea76a254b8583d6..fc503c9370155a69ca6a09cab1f8034b7d68c220 100644
+--- a/Source/WebKit/Shared/API/Cocoa/WebKitPrivate.h
++++ b/Source/WebKit/Shared/API/Cocoa/WebKitPrivate.h
+@@ -23,6 +23,7 @@
+  * THE POSSIBILITY OF SUCH DAMAGE.
+  */
+ 
++#import <WebKit/WebKit.h>
+ #import <WebKit/WKDownloadDelegatePrivate.h>
+ #import <WebKit/WKFoundation.h>
+ #import <WebKit/WKHistoryDelegatePrivate.h>
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKError.h b/Source/WebKit/UIProcess/API/Cocoa/WKError.h
+index 06c59e8f3a70978b13ef630db0f27353bf69c3d4..a2948983803034054ed7a75f3c4ca2a57119b512 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKError.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKError.h
+@@ -48,7 +48,7 @@ WK_EXTERN NSString * const WKErrorDomain WK_API_AVAILABLE(macos(10.10), ios(8.0)
+  @constant WKErrorNavigationAppBoundDomain  Indicates that a navigation failed due to an app-bound domain restriction.
+  @constant WKErrorJavaScriptAppBoundDomain  Indicates that JavaScript execution failed due to an app-bound domain restriction.
+  */
+-typedef NS_ENUM(NSInteger, WKErrorCode) {
++typedef NS_ERROR_ENUM(WKErrorDomain, WKErrorCode) {
+     WKErrorUnknown = 1,
+     WKErrorWebContentProcessTerminated,
+     WKErrorWebViewInvalidated,
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
+index 0405baa4dd13fa7d31fe9e187998299201544a5b..f51fe5e5a7207cd2feebe3629e579c28aaed38c2 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
+@@ -40,6 +40,10 @@ NS_ASSUME_NONNULL_BEGIN
+ @class WKWindowFeatures;
+ @class _WKContextMenuElementInfo;
+ 
++#if TARGET_OS_OSX
++@class NSMenu;
++#endif
++
+ #if TARGET_OS_IOS || (defined(TARGET_OS_VISION) && TARGET_OS_VISION)
+ @class WKContextMenuElementInfo;
+ @class UIContextMenuConfiguration;
+diff --git a/Source/WebKitLegacy/PlatformMac.cmake b/Source/WebKitLegacy/PlatformMac.cmake
+index 47919738fb1df514f9dc6566f2d35ddfb12ef57b..e202c53b9b9614c19f554518357d753f83783eca 100644
+--- a/Source/WebKitLegacy/PlatformMac.cmake
++++ b/Source/WebKitLegacy/PlatformMac.cmake
+@@ -1,5 +1,10 @@
+ include(PlatformCocoa.cmake)
+ 
++# WebCore force-loads PAL and exports its symbols. Linking the archive here
++# embeds a second copy of its Objective-C classes, including WebPanel.
++list(REMOVE_ITEM WebKitLegacy_FRAMEWORKS PAL)
++list(REMOVE_ITEM WebKitLegacy_PRIVATE_LIBRARIES PAL)
++
+ find_library(APPLICATIONSERVICES_LIBRARY ApplicationServices)
+ find_library(QUARTZ_LIBRARY Quartz)
+ find_library(SECURITYINTERFACE_LIBRARY SecurityInterface)
+@@ -451,6 +456,15 @@ set(WebKitLegacy_LEGACY_FORWARDING_HEADERS_FILES
+ # Add these to the public header map.
+ set(WebKitLegacy_PRIVATE_FRAMEWORK_HEADERS ${WebKitLegacy_LEGACY_FORWARDING_HEADERS_FILES})
+ 
++# WebKit's public umbrella also exposes the legacy API. Keep the source paths
++# available to its framework staging step (sibling directories have separate scope).
++set(_webkit_legacy_header_sources)
++foreach (_header IN LISTS WebKitLegacy_LEGACY_FORWARDING_HEADERS_FILES)
++    cmake_path(ABSOLUTE_PATH _header BASE_DIRECTORY "${WEBKITLEGACY_DIR}" NORMALIZE OUTPUT_VARIABLE _source)
++    list(APPEND _webkit_legacy_header_sources "${_source}")
++endforeach ()
++set_property(GLOBAL PROPERTY WebKitLegacy_MAC_HEADER_SOURCES "${_webkit_legacy_header_sources}")
++
+ if (USE_HEADER_MAPS)
+     WEBKIT_WRITE_HEADER_MAP(WebKit
+         DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/WebKit-forwarding-headers.hmap
+diff --git a/Source/cmake/StageMacWebKitHeaders.cmake b/Source/cmake/StageMacWebKitHeaders.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..24d98060d1b978ccd33f9212a56513a2a9aa8343
+--- /dev/null
++++ b/Source/cmake/StageMacWebKitHeaders.cmake
+@@ -0,0 +1,58 @@
++# Manifest entries: copy|source|destination, legacy|source|destination, or
++# forward|legacy-header-name|destination. Do not write through old symlinks.
++file(STRINGS "${MANIFEST}" _entries)
++set(_destinations)
++foreach (_entry IN LISTS _entries)
++    string(REPLACE "|" ";" _fields "${_entry}")
++    list(GET _fields 2 _destination)
++    list(APPEND _destinations "${_destination}")
++endforeach ()
++foreach (_entry IN LISTS _entries)
++    string(REPLACE "|" ";" _fields "${_entry}")
++    list(GET _fields 0 _mode)
++    list(GET _fields 1 _source)
++    list(GET _fields 2 _destination)
++    # A header's visibility can change when the Xcode header phase changes.
++    # Do not leave an obsolete copy for Clang to infer as another submodule.
++    if (_destination MATCHES "WebKit\\.framework/Versions/A/Headers/")
++        string(REPLACE "/Headers/" "/PrivateHeaders/" _other_destination "${_destination}")
++    elseif (_destination MATCHES "WebKit\\.framework/Versions/A/PrivateHeaders/")
++        string(REPLACE "/PrivateHeaders/" "/Headers/" _other_destination "${_destination}")
++    else ()
++        set(_other_destination "")
++    endif ()
++    if (_other_destination AND NOT _other_destination IN_LIST _destinations)
++        file(REMOVE "${_other_destination}")
++    endif ()
++    # Use the same file identity as the build-tree forwarding headers. Swift
++    # imports both layouts when compiling the public and private Clang modules;
++    # separate copies defeat #pragma once and redeclare Objective-C classes.
++    if (_mode STREQUAL "copy")
++        if (IS_SYMLINK "${_destination}")
++            file(READ_SYMLINK "${_destination}" _existing_source)
++            if (_existing_source STREQUAL _source)
++                continue ()
++            endif ()
++        endif ()
++        file(REMOVE "${_destination}")
++        get_filename_component(_directory "${_destination}" DIRECTORY)
++        file(MAKE_DIRECTORY "${_directory}")
++        file(CREATE_LINK "${_source}" "${_destination}" SYMBOLIC)
++        continue ()
++    endif ()
++    if (_mode STREQUAL "forward")
++        set(_contents "#import <WebKitLegacy/${_source}>\n")
++    else ()
++        file(READ "${_source}" _contents)
++        if (_mode STREQUAL "legacy")
++            string(REPLACE "<WebCore/" "<WebKitLegacy/" _contents "${_contents}")
++            string(REGEX REPLACE "(^|\n)( *)WEBCORE_EXPORT " "\\1\\2" _contents "${_contents}")
++        endif ()
++    endif ()
++    if (IS_SYMLINK "${_destination}")
++        file(REMOVE "${_destination}")
++    endif ()
++    get_filename_component(_directory "${_destination}" DIRECTORY)
++    file(MAKE_DIRECTORY "${_directory}")
++    file(CONFIGURE OUTPUT "${_destination}" CONTENT "${_contents}" @ONLY)
++endforeach ()
+diff --git a/Source/cmake/WebKitSwiftPrewarm.cmake b/Source/cmake/WebKitSwiftPrewarm.cmake
+index 8b76b1e08972ab1e9ec6d6735ff4f440b4407c78..f6e2391ec97bbee685fbe9ee3223efd64cb18a9a 100644
+--- a/Source/cmake/WebKitSwiftPrewarm.cmake
++++ b/Source/cmake/WebKitSwiftPrewarm.cmake
+@@ -10,7 +10,9 @@ function(WEBKIT_ADD_SWIFT_PREWARM _consumer _swift_source)
+     add_library(${_prewarm} OBJECT "${_swift_source}")
+ 
+     get_target_property(_opts ${_consumer} COMPILE_OPTIONS)
+-    list(FILTER _opts EXCLUDE REGEX "-emit-clang-header-path")
++    # The prewarmer has its own module name and must not import the consumer's
++    # underlying Objective-C module or overwrite its generated interfaces.
++    list(FILTER _opts EXCLUDE REGEX "-import-underlying-module|-emit-(clang-header|module-interface|private-module-interface)(-path)?")
+     target_compile_options(${_prewarm} PRIVATE ${_opts})
+ 
+     get_target_property(_consumer_bindir ${_consumer} BINARY_DIR)

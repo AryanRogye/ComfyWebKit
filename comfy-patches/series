@@ -9,3 +9,4 @@
 0009-Fix-leftover-cherry-pick-conflict-markers.patch
 0010-removing-whitespace.patch
 0011-removing-unused-code.patch
+0012-configuring-cmake-to-expose-headers-to-a-xcode-project.patch
