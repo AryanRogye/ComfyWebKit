@@ -1,0 +1,24 @@
+From c310df4afa0acd032e099f12a86382dd9b4a003a Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 21 Oct 2026 12:10:57 -0500
+Subject: [PATCH 11/11] removing unused code
+
+---
+ Source/WebCore/loader/cache/CachedResourceLoader.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/Source/WebCore/loader/cache/CachedResourceLoader.cpp b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+index 15597e5a259c..c17ec6d4f149 100644
+--- a/Source/WebCore/loader/cache/CachedResourceLoader.cpp
++++ b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+@@ -1199,7 +1199,6 @@ ResourceErrorOr<Ref<CachedResource>> CachedResourceLoader::requestResource(Cache
+                 CACHEDRESOURCELOADER_RELEASE_LOG_WITH_FRAME("requestResource: Resource blocked by content blocker", frame.get());
+                 String urlStr = resourceRequest.url().string();
+                 page->chrome().client().didJustBlock(urlStr);
+-                page->chrome().client().contentRuleListDidBlockLoad({ frame->frameID(), resourceRequest.url(), resourceRequest.httpMethod(), resourceType, WTF::move(blockingIdentifiers) });
+                 if (type == CachedResource::Type::MainResource) {
+                     auto resource = createResource(type, WTF::move(request), page->sessionID(), protect(page->cookieJar()).ptr(), page->settings(), document.get());
+                     resource->error(CachedResource::Status::LoadError);
+-- 
+2.46.2
+

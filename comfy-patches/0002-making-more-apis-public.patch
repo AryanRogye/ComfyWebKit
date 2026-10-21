@@ -1,0 +1,126 @@
+From 8d17381b1bae4c99a32ee64fa56d19cc729127a2 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 7 Oct 2026 13:15:37 -0500
+Subject: [PATCH 02/11] making more apis public
+
+---
+ Source/WebKit/UIProcess/API/Cocoa/WKWebView.h |  8 +++++++
+ .../WebKit/UIProcess/API/Cocoa/WKWebView.mm   | 21 +++++++++++++------
+ .../UIProcess/API/Cocoa/WKWebViewPrivate.h    |  1 +
+ 3 files changed, 24 insertions(+), 6 deletions(-)
+
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h b/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h
+index 886f7e8d5a86..44c6475d8e1b 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKWebView.h
+@@ -54,6 +54,7 @@ NS_ASSUME_NONNULL_BEGIN
+ @class WKPDFConfiguration;
+ @class WKSnapshotConfiguration;
+ @class WKWebViewConfiguration;
++@class _WKTextExtractionConfiguration;
+ 
+ #if TARGET_OS_OSX
+ @class NSRefreshController;
+@@ -819,6 +820,13 @@ WK_API_AVAILABLE(macos(10.15.4))
+ 
+ #endif
+ 
++@interface WKWebView (TextExtractionDebug)
++
++- (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugText(with:completionHandler:));
++- (void)_debugTextVisibleTextWithCompletionHandler:(WK_SWIFT_UI_ACTOR void (^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugTextVisibleText(completionHandler:));
++
++@end
++
+ @interface WKWebView (WKDeprecated)
+ 
+ @property (nonatomic, readonly, copy) NSArray *certificateChain WK_API_DEPRECATED_WITH_REPLACEMENT("serverTrust", macos(10.11, 10.12), ios(9.0, 10.0));
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm b/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm
+index 8a0b0b69e202..082197451ecd 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKWebView.mm
+@@ -861,7 +861,7 @@ static void addBrowsingContextControllerMethodStubsIfNeeded()
+     preferences->setColorFilterEnabled(!![_configuration _colorFilterEnabled]);
+ 
+     preferences->setUndoManagerAPIEnabled(!![_configuration _undoManagerAPIEnabled]);
+-    
++
+ #if ENABLE(APP_HIGHLIGHTS)
+     preferences->setAppHighlightsEnabled(!![_configuration _appHighlightsEnabled]);
+ #endif
+@@ -1528,7 +1528,7 @@ static WKMediaPlaybackState NODELETE toWKMediaPlaybackState(WebKit::MediaPlaybac
+         }
+         return;
+     }
+-    
++
+     std::optional<WebCore::FrameIdentifier> frameID;
+     if (frame && frame._handle && frame._handle->_frameHandle->frameID())
+         frameID = frame._handle->_frameHandle->frameID();
+@@ -1644,7 +1644,7 @@ static WKMediaPlaybackState NODELETE toWKMediaPlaybackState(WebKit::MediaPlaybac
+         [strongSelf _snapshotRectAfterScreenUpdates:afterScreenUpdates rectInViewCoordinates:rectInViewCoordinates intoImageOfWidth:imageWidth completionHandler:[handler, deviceScale](CGImageRef snapshotImage) {
+             RetainPtr<NSError> error;
+             RetainPtr<UIImage> image;
+-            
++
+             if (!snapshotImage)
+                 error = createNSError(WKErrorUnknown);
+             else
+@@ -2058,7 +2058,7 @@ inline OptionSet<WebKit::FindOptions> toFindOptions(WKFindConfiguration *configu
+             strongSelf->_callbacksDeferredDuringResize.append([updateBlockCopy] {
+                 updateBlockCopy();
+             });
+-            
++
+             return;
+         }
+ #else
+@@ -5026,7 +5026,7 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers,
+ 
+     for (NSData *highlight in highlights)
+         convertAndAddHighlight(buffers, highlight);
+-    
++
+     _page->restoreAppHighlightsAndScrollToIndex(buffers, std::nullopt);
+ #else
+     UNUSED_PARAM(highlights);
+@@ -5038,7 +5038,7 @@ static void convertAndAddHighlight(Vector<Ref<WebCore::SharedMemory>>& buffers,
+     THROW_IF_SUSPENDED;
+ #if ENABLE(APP_HIGHLIGHTS)
+     Vector<Ref<WebCore::SharedMemory>> buffers;
+-    
++
+     convertAndAddHighlight(buffers, highlight);
+     _page->restoreAppHighlightsAndScrollToIndex(buffers, 0);
+ #else
+@@ -7176,6 +7176,15 @@ static Vector<std::pair<String, String>> extractReplacementStrings(_WKTextExtrac
+     return result;
+ }
+ 
++- (void)_debugTextVisibleTextWithCompletionHandler:(void (^)(NSString *))completionHandler {
++    auto configuration = adoptNS([[_WKTextExtractionConfiguration alloc] init]);
++
++    configuration.get().filterOptions = 0;
++
++    [self _debugTextWithConfiguration:configuration.get()
++                    completionHandler:completionHandler];
++}
++
+ - (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(void(^)(NSString *))completionHandler
+ {
+     [self _extractDebugTextWithConfiguration:configuration completionHandler:makeBlockPtr([completionHandler = makeBlockPtr(completionHandler)](_WKTextExtractionResult *result) {
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h b/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h
+index 74fe96438f49..8e392570e8bf 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKWebViewPrivate.h
+@@ -663,6 +663,7 @@ typedef NS_OPTIONS(NSUInteger, _WKWebViewDataType) {
+ - (void)_getNodeForSelectorPathData:(NSData *)data completionHandler:(WK_SWIFT_UI_ACTOR void (^)(_WKJSHandle *))completionHandler WK_SWIFT_ASYNC_NAME(_getNodeForSelectorPathData(_:)) WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4));
+ 
+ - (void)_debugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(NSString *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_debugText(with:completionHandler:));
++
+ - (void)_extractDebugTextWithConfiguration:(_WKTextExtractionConfiguration *)configuration completionHandler:(WK_SWIFT_UI_ACTOR void(^)(_WKTextExtractionResult *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_extractDebugText(with:completionHandler:));
+ - (void)_performInteraction:(_WKTextExtractionInteraction *)interaction completionHandler:(WK_SWIFT_UI_ACTOR void(^)(_WKTextExtractionInteractionResult *))completionHandler WK_API_AVAILABLE(macos(26.4), ios(26.4), visionos(26.4)) NS_SWIFT_NAME(_performInteraction(_:completionHandler:));
+ 
+-- 
+2.46.2
+

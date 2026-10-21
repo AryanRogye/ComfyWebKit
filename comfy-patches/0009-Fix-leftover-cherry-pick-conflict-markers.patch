@@ -1,0 +1,48 @@
+From 1efd0a3de82815d0197fc7b2b8ce4df13baf6460 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 21 Oct 2026 11:28:05 -0500
+Subject: [PATCH 09/11] Fix leftover cherry-pick conflict markers
+
+---
+ Source/WebCore/contentextensions/ContentExtensionParser.cpp | 5 -----
+ Source/WebKit/UIProcess/WebPageProxy.h                      | 3 ---
+ 2 files changed, 8 deletions(-)
+
+diff --git a/Source/WebCore/contentextensions/ContentExtensionParser.cpp b/Source/WebCore/contentextensions/ContentExtensionParser.cpp
+index 82e0079c80a4..ea2cf404c01b 100644
+--- a/Source/WebCore/contentextensions/ContentExtensionParser.cpp
++++ b/Source/WebCore/contentextensions/ContentExtensionParser.cpp
+@@ -118,13 +118,8 @@ static std::error_code getTypeFlags(const JSON::Array& array, ResourceFlags& fla
+ 
+     return { };
+ }
+-<<<<<<< HEAD
+ 
+ static Expected<Trigger, std::error_code> loadTrigger(const JSON::Object& ruleObject)
+-=======
+-
+-static std::expected<Trigger, std::error_code> loadTrigger(const JSON::Object& ruleObject)
+->>>>>>> 0396f9ec0a73 (updating to use 250k content rules instead of 150k)
+ {
+     auto triggerObject = ruleObject.getObject("trigger"_s);
+     if (!triggerObject)
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.h b/Source/WebKit/UIProcess/WebPageProxy.h
+index a6d6b882c1e3..9f1ca8f5d91a 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.h
++++ b/Source/WebKit/UIProcess/WebPageProxy.h
+@@ -2066,12 +2066,9 @@ public:
+ 
+     SpellDocumentTag spellDocumentTag();
+ 
+-<<<<<<< HEAD
+     void didFinishCheckingText(TextCheckerRequestID, const Vector<WebCore::TextCheckingResult>&);
+     void didCancelCheckingText(TextCheckerRequestID);
+ 
+-=======
+->>>>>>> 6ec9b61f0311 (adding new `webView:didJustBlock:blockedURL:` API)
+     void setScrollPinningBehavior(WebCore::ScrollPinningBehavior);
+     WebCore::ScrollPinningBehavior NODELETE scrollPinningBehavior() const;
+ 
+-- 
+2.46.2
+

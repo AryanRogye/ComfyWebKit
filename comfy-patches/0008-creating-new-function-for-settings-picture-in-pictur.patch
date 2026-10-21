@@ -1,0 +1,95 @@
+From e3663c1b0e4a6679a595e2884adba1ff4f8999cb Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Tue, 20 Oct 2026 21:44:19 -0500
+Subject: [PATCH 08/11] creating new function for settings picture in picture
+ on macOS
+
+---
+ ReadMe.md                                          |  4 ++++
+ Source/WebKit/UIProcess/API/Cocoa/WKPreferences.h  |  2 ++
+ Source/WebKit/UIProcess/API/Cocoa/WKPreferences.mm | 13 +++++++++----
+ 3 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/ReadMe.md b/ReadMe.md
+index 969795284dab..f0f2b2ce9664 100644
+--- a/ReadMe.md
++++ b/ReadMe.md
+@@ -51,6 +51,10 @@ The `blockedURL` parameter identifies the URL that triggered the blocking rule,
+ 
+ `_setShouldSuppressFirstResponderChanges` allows control on the `WKWebView` for it to take firstResponder on load or not
+ 
++### Allow Picture In Picture on macOS
++
++`setAllowsPictureInPictureMediaPlayback` allows control on `WKPreferences` to allow picture in picture
++
+ **Usage:**
+ 
+ ```swift
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.h b/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.h
+index c5e3f803f8f9..58cb81a8d096 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.h
+@@ -35,6 +35,8 @@ WK_SWIFT_UI_ACTOR
+ WK_CLASS_AVAILABLE(macos(10.10), ios(8.0))
+ @interface WKPreferences : NSObject <NSSecureCoding>
+ 
++- (void)setAllowsPictureInPictureMediaPlayback:(BOOL)allowed;
++
+ /*! @abstract The minimum font size in points.
+  @discussion The default value is 0.
+  */
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.mm b/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.mm
+index c9b639151b15..6be761dbe6c5 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.mm
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKPreferences.mm
+@@ -76,7 +76,7 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
+ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+     [coder encodeBool:self.javaScriptEnabled forKey:@"javaScriptEnabled"];
+ ALLOW_DEPRECATED_DECLARATIONS_END
+-    
++
+     [coder encodeBool:self.shouldPrintBackgrounds forKey:@"shouldPrintBackgrounds"];
+ 
+     [coder encodeBool:self.tabFocusesLinks forKey:@"tabFocusesLinks"];
+@@ -94,7 +94,7 @@ ALLOW_DEPRECATED_DECLARATIONS_END
+ ALLOW_DEPRECATED_DECLARATIONS_BEGIN
+     self.javaScriptEnabled = [coder decodeBoolForKey:@"javaScriptEnabled"];
+ ALLOW_DEPRECATED_DECLARATIONS_END
+-    
++
+     self.shouldPrintBackgrounds = [coder decodeBoolForKey:@"shouldPrintBackgrounds"];
+ 
+     self.tabFocusesLinks = [coder decodeBoolForKey:@"tabFocusesLinks"];
+@@ -104,6 +104,11 @@ ALLOW_DEPRECATED_DECLARATIONS_END
+     return self;
+ }
+ 
++- (void)setAllowsPictureInPictureMediaPlayback:(BOOL)allowed
++{
++    [self _setAllowsPictureInPictureMediaPlayback:allowed];
++}
++
+ - (id)copyWithZone:(NSZone *)zone
+ {
+     return [wrapper(protect(*_preferences)->copy()) retain];
+@@ -821,7 +826,7 @@ static _WKEditableLinkBehavior NODELETE toAPI(WebCore::EditableLinkBehavior beha
+     case WebCore::EditableLinkBehavior::NeverLive:
+         return _WKEditableLinkBehaviorNeverLive;
+     }
+-    
++
+     ASSERT_NOT_REACHED();
+     return _WKEditableLinkBehaviorNeverLive;
+ }
+@@ -840,7 +845,7 @@ static WebCore::EditableLinkBehavior NODELETE toEditableLinkBehavior(_WKEditable
+     case _WKEditableLinkBehaviorNeverLive:
+         return WebCore::EditableLinkBehavior::NeverLive;
+     }
+-    
++
+     ASSERT_NOT_REACHED();
+     return WebCore::EditableLinkBehavior::NeverLive;
+ }
+-- 
+2.46.2
+

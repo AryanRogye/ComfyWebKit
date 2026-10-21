@@ -1,0 +1,690 @@
+From 2de84564ce34baba0b480a6ec947c6eacdfa4122 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Mon, 12 Oct 2026 17:01:30 -0500
+Subject: [PATCH 05/11] adding new `webView:didJustBlock:blockedURL:` API
+
+---
+ ReadMe.md                                     | 14 +++++++
+ .../loader/cache/CachedResourceLoader.cpp     |  7 +++-
+ Source/WebCore/page/ChromeClient.h            |  9 +++--
+ .../UIProcess/API/APINavigationClient.h       |  1 +
+ .../API/Cocoa/WKNavigationDelegate.h          |  6 +++
+ .../UIProcess/API/Cocoa/WKWebsiteDataStore.h  |  2 +
+ .../UIProcess/API/Cocoa/WKWebsiteDataStore.mm | 12 +++++-
+ .../WebKit/UIProcess/Cocoa/NavigationState.h  |  8 ++--
+ .../WebKit/UIProcess/Cocoa/NavigationState.mm | 33 ++++++++++++++---
+ Source/WebKit/UIProcess/WebPageProxy.cpp      |  6 +++
+ Source/WebKit/UIProcess/WebPageProxy.h        | 37 ++++++++++---------
+ .../WebKit/UIProcess/WebPageProxy.messages.in |  3 +-
+ .../WebCoreSupport/WebChromeClient.cpp        | 13 +++++--
+ .../WebCoreSupport/WebChromeClient.h          | 28 +++++++-------
+ 14 files changed, 129 insertions(+), 50 deletions(-)
+
+diff --git a/ReadMe.md b/ReadMe.md
+index 13c23dd6fada..acf4c6807995 100644
+--- a/ReadMe.md
++++ b/ReadMe.md
+@@ -41,6 +41,20 @@ Unlike `removeAllUserScripts()`, this method preserves the remaining registered
+ 
+ Implementation note: The current implementation removes all registered scripts internally, then re-adds every script except the specified one. It does not undo JavaScript that has already executed in existing pages.
+ 
++### Content blocking notifications
++
++`WKNavigationDelegate` exposes the optional `webView:didJustBlock:blockedURL:` delegate method, allowing applications to receive notifications when a URL is blocked by a registered content rule list.
++
++The `blockedURL` parameter identifies the URL that triggered the blocking rule, enabling applications to monitor blocked requests, display blocking statistics, or provide feedback to users.
++
++**Usage:**
++
++```swift
++func webView(_ webView: WKWebView, didJustBlock blockedURL: URL) {
++    print("Blocked URL: \(blockedURL)")
++}
++```
++
+ ## Getting the source
+ 
+ ```sh
+diff --git a/Source/WebCore/loader/cache/CachedResourceLoader.cpp b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+index 468e3e219018..15597e5a259c 100644
+--- a/Source/WebCore/loader/cache/CachedResourceLoader.cpp
++++ b/Source/WebCore/loader/cache/CachedResourceLoader.cpp
+@@ -1197,6 +1197,9 @@ ResourceErrorOr<Ref<CachedResource>> CachedResourceLoader::requestResource(Cache
+             request.applyResults(WTF::move(results), page.ptr());
+             if (shouldBlock) {
+                 CACHEDRESOURCELOADER_RELEASE_LOG_WITH_FRAME("requestResource: Resource blocked by content blocker", frame.get());
++                String urlStr = resourceRequest.url().string();
++                page->chrome().client().didJustBlock(urlStr);
++                page->chrome().client().contentRuleListDidBlockLoad({ frame->frameID(), resourceRequest.url(), resourceRequest.httpMethod(), resourceType, WTF::move(blockingIdentifiers) });
+                 if (type == CachedResource::Type::MainResource) {
+                     auto resource = createResource(type, WTF::move(request), page->sessionID(), protect(page->cookieJar()).ptr(), page->settings(), document.get());
+                     resource->error(CachedResource::Status::LoadError);
+@@ -1596,7 +1599,7 @@ CachedResourceLoader::RevalidationPolicy CachedResourceLoader::determineRevalida
+         LOG(ResourceLoading, "CachedResourceLoader::determineRevalidationPolicy reloading due to CachePolicyReload.");
+         return Reload;
+     }
+-    
++
+     // We'll try to reload the resource if it failed last time.
+     if (existingResource->errorOccurred()) {
+         LOG(ResourceLoading, "CachedResourceLoader::determineRevalidationPolicye reloading due to resource being in the error state");
+@@ -1831,7 +1834,7 @@ Vector<Ref<SVGImage>> CachedResourceLoader::allCachedSVGImages() const
+         if (RefPtr image = cachedResourceSVGImage(resource.get()))
+             allCachedSVGImages.append(image.releaseNonNull());
+     }
+-        
++
+     return allCachedSVGImages;
+ }
+ 
+diff --git a/Source/WebCore/page/ChromeClient.h b/Source/WebCore/page/ChromeClient.h
+index 9edd2cc1ae48..52bbdf09b1e2 100644
+--- a/Source/WebCore/page/ChromeClient.h
++++ b/Source/WebCore/page/ChromeClient.h
+@@ -280,6 +280,7 @@ public:
+     virtual std::optional<PointerCharacteristics> pointerCharacteristicsOfPrimaryPointingDevice() const = 0;
+     virtual OptionSet<PointerCharacteristics> pointerCharacteristicsOfAllAvailablePointingDevices() const = 0;
+ 
++    virtual void didJustBlock(String&) { };
+     virtual void invalidateRootView(const IntRect&) = 0;
+     virtual void invalidateContentsAndRootView(const IntRect&) = 0;
+     virtual void invalidateContentsForSlowScroll(const IntRect&) = 0;
+@@ -510,7 +511,7 @@ public:
+ 
+     // Returns a bitfield indicating conditions that can trigger the compositor.
+     virtual CompositingTriggerFlags allowedCompositingTriggers() const { return static_cast<CompositingTriggerFlags>(AllTriggers); }
+-    
++
+     // Returns true if layer tree updates are disabled.
+     virtual bool layerTreeStateIsFrozen() const { return false; }
+ 
+@@ -541,7 +542,7 @@ public:
+ 
+     virtual void exitVideoFullscreenForVideoElement(HTMLVideoElement&, CompletionHandler<void(bool)>&& completionHandler = [](bool) { }) { completionHandler(true); }
+     virtual void exitVideoFullscreenToModeWithoutAnimation(HTMLVideoElement&, HTMLMediaElementEnums::VideoFullscreenMode) { }
+-    virtual bool requiresFullscreenForVideoPlayback() { return false; } 
++    virtual bool requiresFullscreenForVideoPlayback() { return false; }
+ 
+ #if ENABLE(FULLSCREEN_API)
+     virtual bool supportsFullScreenForElement(const Element&, bool) { return false; }
+@@ -603,7 +604,7 @@ public:
+     virtual std::optional<ScrollbarOverlayStyle> preferredScrollbarOverlayStyle() { return std::nullopt; }
+ 
+     virtual void wheelEventHandlersChanged(bool hasHandlers) = 0;
+-        
++
+     virtual bool isSVGImageChromeClient() const { return false; }
+ 
+ #if ENABLE(POINTER_LOCK)
+@@ -747,7 +748,7 @@ public:
+     virtual void didAddOrRemoveViewportConstrainedObjects() { }
+ 
+     virtual bool isUsingUISideCompositing() const { return false; }
+-    
++
+     virtual bool isInStableState() const { return true; }
+ 
+     virtual FloatSize screenSizeForFingerprintingProtections(const LocalFrame&, FloatSize defaultSize) const { return defaultSize; }
+diff --git a/Source/WebKit/UIProcess/API/APINavigationClient.h b/Source/WebKit/UIProcess/API/APINavigationClient.h
+index 8107b6975da5..690ef0c16bd8 100644
+--- a/Source/WebKit/UIProcess/API/APINavigationClient.h
++++ b/Source/WebKit/UIProcess/API/APINavigationClient.h
+@@ -79,6 +79,7 @@ class NavigationClient {
+ public:
+     virtual ~NavigationClient() { }
+ 
++    virtual void didJustBlock(WebKit::WebPageProxy&, Ref<API::String>&) { };
+     virtual void didStartProvisionalNavigation(WebKit::WebPageProxy&, const WebCore::ResourceRequest&, Navigation*, Object*) { }
+     virtual void didStartProvisionalLoadForFrame(WebKit::WebPageProxy&, WebCore::ResourceRequest&&, WebKit::FrameInfoData&&) { }
+     virtual void didReceiveServerRedirectForProvisionalNavigation(WebKit::WebPageProxy&, Navigation*, Object*) { }
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKNavigationDelegate.h b/Source/WebKit/UIProcess/API/Cocoa/WKNavigationDelegate.h
+index 2cd87898b6c8..51d5139b1a78 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKNavigationDelegate.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKNavigationDelegate.h
+@@ -135,6 +135,12 @@ WK_SWIFT_UI_ACTOR
+  */
+ - (void)webView:(WKWebView *)webView didCommitNavigation:(null_unspecified WKNavigation *)navigation;
+ 
++/*! @abstract Invoked when content blocking is performed
++ @param webView The web view invoking the delegate method.
++ @param blockedURL The url that was blocked
++*/
++- (void)webView:(WKWebView *)webView didJustBlock:(NSURL *)blockedURL;
++
+ /*! @abstract Invoked when a main frame navigation completes.
+  @param webView The web view invoking the delegate method.
+  @param navigation The navigation.
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.h b/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.h
+index dcab0400bfdd..948766285883 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.h
+@@ -43,6 +43,8 @@ WK_SWIFT_UI_ACTOR
+ WK_CLASS_AVAILABLE(macos(10.11), ios(9.0))
+ @interface WKWebsiteDataStore : NSObject <NSSecureCoding>
+ 
+++ (void)setTrackingPreventionEnabled:(BOOL)enabled;
++
+ /* @abstract Returns the default data store. */
+ + (WKWebsiteDataStore *)defaultDataStore;
+ 
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.mm b/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.mm
+index ae8260799123..363c052bb69e 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.mm
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKWebsiteDataStore.mm
+@@ -24,6 +24,8 @@
+  */
+ 
+ #import "config.h"
++#include "UIProcess/WebsiteData/WebsiteDataStore.h"
++#include "UIProcess/API/Cocoa/WKWebsiteDataStore.h"
+ #import "WKWebsiteDataStoreInternal.h"
+ 
+ #import "APIString.h"
+@@ -399,6 +401,12 @@ private:
+ 
+ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
+ 
+++ (void)setTrackingPreventionEnabled:(BOOL)enabled
++{
++    auto& store = WebKit::WebsiteDataStore::defaultDataStore();
++    store.setTrackingPreventionEnabled(enabled);
++}
++
+ + (WKWebsiteDataStore *)defaultDataStore
+ {
+     return wrapper(WebKit::WebsiteDataStore::defaultDataStore());
+@@ -413,7 +421,7 @@ WK_OBJECT_DISABLE_DISABLE_KVC_IVAR_ACCESS;
+ {
+     if (linkedOnOrAfterSDKWithBehavior(SDKAlignedBehavior::WKWebsiteDataStoreInitReturningNil))
+         [NSException raise:NSGenericException format:@"Calling [WKWebsiteDataStore init] is not supported."];
+-    
++
+     if (!(self = [super init]))
+         return nil;
+ 
+@@ -971,7 +979,7 @@ struct WKWebsiteData {
+         completionHandler(nil);
+         return;
+     }
+-    
++
+     page->getLoadedSubresourceDomains([completionHandler = makeBlockPtr(completionHandler)] (Vector<WebCore::RegistrableDomain>&& loadedSubresourceDomains) {
+         Vector<RefPtr<API::Object>> apiDomains = WTF::map(loadedSubresourceDomains, [](auto& domain) -> RefPtr<API::Object> {
+             return API::String::create(String(domain.string()));
+diff --git a/Source/WebKit/UIProcess/Cocoa/NavigationState.h b/Source/WebKit/UIProcess/Cocoa/NavigationState.h
+index a6827dab668d..1fcf8d2d6412 100644
+--- a/Source/WebKit/UIProcess/Cocoa/NavigationState.h
++++ b/Source/WebKit/UIProcess/Cocoa/NavigationState.h
+@@ -107,6 +107,7 @@ private:
+ 
+     private:
+ 
++        void didJustBlock(WebPageProxy&, Ref<API::String>&) override;
+         void didStartProvisionalNavigation(WebPageProxy&, const WebCore::ResourceRequest&, API::Navigation*, API::Object*) override;
+         void didStartProvisionalLoadForFrame(WebPageProxy&, WebCore::ResourceRequest&&, FrameInfoData&&) override;
+         void didReceiveServerRedirectForProvisionalNavigation(WebPageProxy&, API::Navigation*, API::Object*) override;
+@@ -165,19 +166,19 @@ private:
+ 
+         WeakPtr<NavigationState> m_navigationState;
+     };
+-    
++
+     class HistoryClient final : public API::HistoryClient {
+         WTF_MAKE_TZONE_ALLOCATED(HistoryClient);
+     public:
+         explicit HistoryClient(NavigationState&);
+         ~HistoryClient();
+-        
++
+     private:
+         void didNavigateWithNavigationData(WebPageProxy&, const WebNavigationDataStore&) override;
+         void didPerformClientRedirect(WebPageProxy&, const WTF::String&, const WTF::String&) override;
+         void didPerformServerRedirect(WebPageProxy&, const WTF::String&, const WTF::String&) override;
+         void didUpdateHistoryTitle(WebPageProxy&, const WTF::String&, const WTF::String&) override;
+-        
++
+         WeakPtr<NavigationState> m_navigationState;
+     };
+ 
+@@ -218,6 +219,7 @@ private:
+     WeakObjCPtr<id<WKNavigationDelegate>> m_navigationDelegate;
+ 
+     struct {
++        bool webViewDidJustBlock: 1;
+         bool webViewDecidePolicyForNavigationActionDecisionHandler : 1;
+         bool webViewDecidePolicyForNavigationActionWithPreferencesDecisionHandler : 1;
+         bool webViewDecidePolicyForNavigationActionWithPreferencesUserInfoDecisionHandler : 1;
+diff --git a/Source/WebKit/UIProcess/Cocoa/NavigationState.mm b/Source/WebKit/UIProcess/Cocoa/NavigationState.mm
+index 01948c761a60..1d948dafe1b2 100644
+--- a/Source/WebKit/UIProcess/Cocoa/NavigationState.mm
++++ b/Source/WebKit/UIProcess/Cocoa/NavigationState.mm
+@@ -24,6 +24,8 @@
+  */
+ 
+ #import "config.h"
++#include <objc/NSObjCRuntime.h>
++#include <Foundation/Foundation.h>
+ #import "NavigationState.h"
+ 
+ #import "APIContentRuleListAction.h"
+@@ -168,7 +170,7 @@ UniqueRef<API::NavigationClient> NavigationState::createNavigationClient()
+ {
+     return makeUniqueRef<NavigationClient>(*this);
+ }
+-    
++
+ UniqueRef<API::HistoryClient> NavigationState::createHistoryClient()
+ {
+     return makeUniqueRef<HistoryClient>(*this);
+@@ -183,6 +185,7 @@ void NavigationState::setNavigationDelegate(id<WKNavigationDelegate> delegate)
+ {
+     m_navigationDelegate = delegate;
+ 
++    m_navigationDelegateMethods.webViewDidJustBlock = [delegate respondsToSelector:@selector(webView:didJustBlock:)];
+     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionDecisionHandler = [delegate respondsToSelector:@selector(webView:decidePolicyForNavigationAction:decisionHandler:)];
+     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesDecisionHandler = [delegate respondsToSelector:@selector(webView:decidePolicyForNavigationAction:preferences:decisionHandler:)];
+     m_navigationDelegateMethods.webViewDecidePolicyForNavigationActionWithPreferencesUserInfoDecisionHandler = [delegate respondsToSelector:@selector(_webView:decidePolicyForNavigationAction:preferences:userInfo:decisionHandler:)];
+@@ -203,7 +206,7 @@ void NavigationState::setNavigationDelegate(id<WKNavigationDelegate> delegate)
+     m_navigationDelegateMethods.webViewDidFailLoadDueToNetworkConnectionIntegrityWithURL = [delegate respondsToSelector:@selector(_webView:didFailLoadDueToNetworkConnectionIntegrityWithURL:)];
+     m_navigationDelegateMethods.webViewDidChangeLookalikeCharactersFromURLToURL = [delegate respondsToSelector:@selector(_webView:didChangeLookalikeCharactersFromURL:toURL:)];
+     m_navigationDelegateMethods.webViewDidPromptForStorageAccessForSubFrameDomainForQuirk = [delegate respondsToSelector:@selector(_webView:didPromptForStorageAccess:forSubFrameDomain:forQuirk:)];
+-    
++
+     m_navigationDelegateMethods.webViewNavigationDidFailProvisionalLoadInSubframeWithError = [delegate respondsToSelector:@selector(_webView:navigation:didFailProvisionalLoadInSubframe:withError:)];
+     m_navigationDelegateMethods.webViewWillPerformClientRedirect = [delegate respondsToSelector:@selector(_webView:willPerformClientRedirectToURL:delay:)];
+     m_navigationDelegateMethods.webViewDidPerformClientRedirect = [delegate respondsToSelector:@selector(_webView:didPerformClientRedirectFromURL:toURL:)];
+@@ -800,7 +803,7 @@ void NavigationState::NavigationClient::contentRuleListMatchedRule(WebPageProxy&
+ #endif
+ }
+ #endif
+-    
++
+ void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPageProxy& page, Ref<API::NavigationResponse>&& navigationResponse, Ref<WebFramePolicyListenerProxy>&& listener)
+ {
+     RefPtr navigationState = m_navigationState.get();
+@@ -853,6 +856,26 @@ void NavigationState::NavigationClient::decidePolicyForNavigationResponse(WebPag
+     }).get()];
+ }
+ 
++void NavigationState::NavigationClient::didJustBlock(WebKit::WebPageProxy&, Ref<API::String>& url)
++{
++    RefPtr navigationState = m_navigationState.get();
++    if (!navigationState)
++        return;
++
++    auto navigationDelegate = navigationState->navigationDelegate();
++    if (!navigationDelegate)
++        return;
++
++    if (navigationState->m_navigationDelegateMethods.webViewDidJustBlock) {
++
++        NSURL *nsURL = [NSURL URLWithString:url->string().createNSString().autorelease()];
++        if (!nsURL)
++            return;
++
++        [navigationDelegate webView:navigationState->webView().get() didJustBlock:(nsURL)];
++    }
++}
++
+ void NavigationState::NavigationClient::didStartProvisionalNavigation(WebPageProxy&, const WebCore::ResourceRequest& request, API::Navigation* navigation, API::Object* userInfo)
+ {
+     RefPtr navigationState = m_navigationState.get();
+@@ -1099,7 +1122,7 @@ void NavigationState::NavigationClient::didApplyLinkDecorationFiltering(WebPageP
+     RefPtr navigationState = m_navigationState.get();
+     if (!m_navigationState)
+         return;
+-    
++
+     auto navigationDelegate = navigationState->navigationDelegate();
+     if (!navigationDelegate)
+         return;
+@@ -1531,7 +1554,7 @@ void NavigationState::NavigationClient::decidePolicyForSOAuthorizationLoad(WebPa
+ #endif
+ 
+ // HistoryDelegatePrivate support
+-    
++
+ NavigationState::HistoryClient::HistoryClient(NavigationState& navigationState)
+     : m_navigationState(navigationState)
+ {
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.cpp b/Source/WebKit/UIProcess/WebPageProxy.cpp
+index f3be01407926..a1a8b143a8ca 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.cpp
++++ b/Source/WebKit/UIProcess/WebPageProxy.cpp
+@@ -11047,6 +11047,12 @@ void WebPageProxy::requestFrameScreenPosition(FrameIdentifier frameID)
+     }
+ }
+ 
++void WebPageProxy::didJustBlock(String&& url)
++{
++    Ref<API::String> toSendUrl = API::String::create(WTF::move(url));
++    m_navigationClient->didJustBlock(*this, toSendUrl);
++}
++
+ void WebPageProxy::applyAccessibilityFrameScreenPosition(FrameIdentifier frameID, const FloatRect& rootViewRect)
+ {
+     static constexpr float unitRectSize = 1000;
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.h b/Source/WebKit/UIProcess/WebPageProxy.h
+index 4654c269fd2b..a6d6b882c1e3 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.h
++++ b/Source/WebKit/UIProcess/WebPageProxy.h
+@@ -790,6 +790,7 @@ public:
+ 
+     std::optional<SharedPreferencesForWebProcess> sharedPreferencesForWebProcess(IPC::Connection&) const;
+ 
++    void didJustBlock(String&&);
+     void addPreviouslyVisitedPath(const String&);
+ 
+     bool isLockdownModeExplicitlySet() const { return m_isLockdownModeExplicitlySet; }
+@@ -809,7 +810,7 @@ public:
+     void detectDataInAllFrames(OptionSet<WebCore::DataDetectorType>, CompletionHandler<void(DataDetectionResult&&)>&&);
+     void removeDataDetectedLinks(CompletionHandler<void(DataDetectionResult&&)>&&);
+ #endif
+-        
++
+ #if PLATFORM(COCOA)
+     RemoteScrollingCoordinatorProxy* scrollingCoordinatorProxy() const { return m_scrollingCoordinatorProxy.get(); }
+ #endif
+@@ -956,7 +957,7 @@ public:
+     WeakPtr<SecKeyProxyStore> secKeyProxyStore(const WebCore::AuthenticationChallenge&);
+ 
+     void makeViewBlankIfUnpaintedSinceLastLoadCommit();
+-        
++
+     void close();
+     bool tryClose();
+     bool isClosed() const { return m_isClosed; }
+@@ -1084,7 +1085,6 @@ public:
+     void viewWillEndLiveResize();
+ 
+     void setInitialFocus(bool forward, bool isKeyboardEventValid, const std::optional<WebKeyboardEvent>&, CompletionHandler<void()>&&);
+-    
+     void clearSelection(std::optional<WebCore::FrameIdentifier> = std::nullopt);
+     void restoreSelectionInFocusedEditableElement();
+ 
+@@ -1173,7 +1173,7 @@ public:
+     void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, bool sendEvenIfUnchanged);
+     void updateVisibleContentRectsLocally(const VisibleContentRectUpdateInfo&);
+ #endif
+-        
++
+     void adjustLayersForLayoutViewport(const WebCore::FloatPoint& scrollPosition, const WebCore::FloatRect& layoutViewport, double scale);
+ 
+     void stickyScrollingTreeNodeBeganSticking();
+@@ -1203,7 +1203,7 @@ public:
+     void focusTextInputContextAndPlaceCaret(const WebCore::ElementContext&, const WebCore::IntPoint&, CompletionHandler<void(bool)>&&);
+ 
+     void setShouldRevealCurrentSelectionAfterInsertion(bool);
+-        
++
+     void setScreenIsBeingCaptured(bool);
+ 
+     double displayedContentScale() const;
+@@ -1345,7 +1345,7 @@ public:
+ 
+     void setInputMethodState(std::optional<InputMethodState>&&);
+ #endif
+-        
++
+     void requestScrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin);
+     void scrollToRect(const WebCore::FloatRect& targetRect, const WebCore::FloatPoint& origin);
+     void setContentOffset(std::optional<int> x, std::optional<int> y, WebCore::ScrollIsAnimated);
+@@ -1555,7 +1555,7 @@ public:
+     double viewScaleFactor() const { return m_viewScaleFactor; }
+     void scaleView(double scale);
+     void setShouldScaleViewToFitDocument(bool);
+-    
++
+     float NODELETE deviceScaleFactor() const;
+ #if USE(GRAPHICS_LAYER_WC) || USE(GRAPHICS_LAYER_TEXTURE_MAPPER)
+     float intrinsicDeviceScaleFactor() const { return m_intrinsicDeviceScaleFactor; }
+@@ -1632,12 +1632,12 @@ public:
+ 
+     void setShouldUseImplicitRubberBandControl(bool shouldUseImplicitRubberBandControl) { m_shouldUseImplicitRubberBandControl = shouldUseImplicitRubberBandControl; }
+     bool shouldUseImplicitRubberBandControl() const { return m_shouldUseImplicitRubberBandControl; }
+-        
++
+     void setEnableVerticalRubberBanding(bool);
+     bool NODELETE verticalRubberBandingIsEnabled() const;
+     void setEnableHorizontalRubberBanding(bool);
+     bool NODELETE horizontalRubberBandingIsEnabled() const;
+-        
++
+     void setBackgroundExtendsBeyondPage(bool);
+     bool NODELETE backgroundExtendsBeyondPage() const;
+ 
+@@ -1766,7 +1766,7 @@ public:
+ 
+     void backForwardRemovedItem(WebCore::BackForwardFrameItemIdentifier);
+ 
+-#if ENABLE(DRAG_SUPPORT)    
++#if ENABLE(DRAG_SUPPORT)
+     // Drag and drop support.
+     void dragEntered(WebCore::DragData&, const String& dragStorageName = String());
+     void dragUpdated(WebCore::DragData&, const String& dragStorageName = String());
+@@ -2066,9 +2066,12 @@ public:
+ 
+     SpellDocumentTag spellDocumentTag();
+ 
++<<<<<<< HEAD
+     void didFinishCheckingText(TextCheckerRequestID, const Vector<WebCore::TextCheckingResult>&);
+     void didCancelCheckingText(TextCheckerRequestID);
+-        
++
++=======
++>>>>>>> 6ec9b61f0311 (adding new `webView:didJustBlock:blockedURL:` API)
+     void setScrollPinningBehavior(WebCore::ScrollPinningBehavior);
+     WebCore::ScrollPinningBehavior NODELETE scrollPinningBehavior() const;
+ 
+@@ -2474,7 +2477,7 @@ public:
+ 
+     void disableServiceWorkerEntitlementInNetworkProcess();
+     void clearServiceWorkerEntitlementOverride(CompletionHandler<void()>&&);
+-        
++
+ #if PLATFORM(COCOA)
+     std::optional<IPC::AsyncReplyID> grantAccessToCurrentPasteboardData(const String& pasteboardName, CompletionHandler<void()>&&, std::optional<WebCore::FrameIdentifier> = std::nullopt);
+ #endif
+@@ -3582,7 +3585,7 @@ private:
+ 
+     void tryCloseTimedOut();
+     void makeStorageSpaceRequest(WebCore::FrameIdentifier, const String& originIdentifier, const String& databaseName, const String& displayName, uint64_t currentQuota, uint64_t currentOriginUsage, uint64_t currentDatabaseUsage, uint64_t expectedUsage, CompletionHandler<void(uint64_t)>&&);
+-        
++
+ #if ENABLE(APP_BOUND_DOMAINS)
+     bool setIsNavigatingToAppBoundDomainAndCheckIfPermitted(bool isMainFrame, const URL&, std::optional<NavigatingToAppBoundDomain>);
+ #endif
+@@ -3596,7 +3599,7 @@ private:
+ #if ENABLE(IMAGE_ANALYSIS) && PLATFORM(MAC)
+     void showImageInQuickLookPreviewPanel(WebCore::ShareableBitmap& imageBitmap, const String& tooltip, const URL& imageURL, QuickLookPreviewActivity);
+ #endif
+-        
++
+ #if ENABLE(APP_HIGHLIGHTS)
+     void setUpHighlightsObserver();
+ #endif
+@@ -4054,7 +4057,7 @@ private:
+     bool m_canShortCircuitHorizontalWheelEvents { true };
+ 
+     bool m_shouldUseImplicitRubberBandControl { false };
+-        
++
+     bool m_enableVerticalRubberBanding { true };
+     bool m_enableHorizontalRubberBanding { true };
+ 
+@@ -4201,7 +4204,7 @@ private:
+     bool m_sessionStateWasRestoredByAPIRequest { false };
+     bool m_isQuotaIncreaseDenied { false };
+     bool m_isLayerTreeFrozenDueToSwipeAnimation { false };
+-    
++
+     String m_overriddenMediaType;
+ 
+     Vector<String> m_corsDisablingPatterns;
+@@ -4211,7 +4214,7 @@ private:
+         RefPtr<API::Object> messageBody;
+     };
+     Vector<InjectedBundleMessage> m_pendingInjectedBundleMessages;
+-        
++
+ #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
+     RefPtr<WebDeviceOrientationUpdateProviderProxy> m_webDeviceOrientationUpdateProviderProxy;
+ #endif
+diff --git a/Source/WebKit/UIProcess/WebPageProxy.messages.in b/Source/WebKit/UIProcess/WebPageProxy.messages.in
+index 321e0fbb7843..dbb0115cc052 100644
+--- a/Source/WebKit/UIProcess/WebPageProxy.messages.in
++++ b/Source/WebKit/UIProcess/WebPageProxy.messages.in
+@@ -28,6 +28,7 @@ Copyright (C) 2010-2024 Apple Inc. All rights reserved.
+ ]
+ messages -> WebPageProxy {
+     # UI messages
++    DidJustBlock(String url)
+     CreateNewPage(struct WebCore::WindowFeatures windowFeatures, struct WebKit::NavigationActionData navigationActionData) -> (std::optional<WebCore::PageIdentifier> newPageID, std::optional<WebKit::WebPageCreationParameters> newPageParameters) Synchronous
+     ShowPage()
+     ClosePage()
+@@ -538,7 +539,7 @@ messages -> WebPageProxy {
+     FixedLayoutSizeDidChange(WebCore::IntSize fixedLayoutSize)
+ 
+     DidRestoreScrollPosition()
+-    
++
+     RequestScrollToRect(WebCore::FloatRect targetRect, WebCore::FloatPoint origin)
+ 
+     GetLoadDecisionForIcons(HashMap<WebKit::CallbackID, WebCore::LinkIcon> icons)
+diff --git a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+index db96c124e8ef..2b3d838a21cd 100644
+--- a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
++++ b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.cpp
+@@ -283,6 +283,13 @@ void WebChromeClient::focus()
+     }
+ }
+ 
++void WebChromeClient::didJustBlock(String& url)
++{
++    if (RefPtr page = m_page.get()) {
++        page->send(Messages::WebPageProxy::DidJustBlock(url));
++    }
++}
++
+ void WebChromeClient::unfocus()
+ {
+     if (RefPtr page = m_page.get())
+@@ -333,7 +340,7 @@ void WebChromeClient::assistiveTechnologyMakeFirstResponder()
+         page->send(Messages::WebPageProxy::AssistiveTechnologyMakeFirstResponder());
+ }
+ 
+-#endif    
++#endif
+ 
+ bool WebChromeClient::canTakeFocus(FocusDirection) const
+ {
+@@ -956,7 +963,7 @@ bool WebChromeClient::shouldUnavailablePluginMessageBeButton(PluginUnavailabilit
+     ASSERT_NOT_REACHED();
+     return false;
+ }
+-    
++
+ void WebChromeClient::unavailablePluginButtonClicked(Element& element, PluginUnavailabilityReason pluginUnavailabilityReason) const
+ {
+     UNUSED_PARAM(element);
+@@ -1057,7 +1064,7 @@ void WebChromeClient::transcodeChosenFiles(Vector<String>&& transcodingPaths, St
+ 
+     page->sendWithAsyncReply(Messages::WebPageProxy::TranscodeChosenFiles(transcodingPaths, destinationUTI, destinationExtension), WTF::move(completion));
+ }
+-    
++
+ void WebChromeClient::showShareSheet(ShareDataWithParsedURL&& shareData, CompletionHandler<void(bool)>&& callback)
+ {
+     if (RefPtr page = m_page.get())
+diff --git a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.h b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.h
+index 0ce7d8829479..d08c7a612f4d 100644
+--- a/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.h
++++ b/Source/WebKit/WebProcess/WebCoreSupport/WebChromeClient.h
+@@ -72,15 +72,17 @@ public:
+ private:
+     bool isWebChromeClient() const final { return true; }
+     void chromeDestroyed() final;
+-    
++
+     void setWindowRect(const WebCore::FloatRect&) final;
+     WebCore::FloatRect windowRect() const final;
+-    
++
+     WebCore::FloatRect pageRect() const final;
+-    
++
+     void focus() final;
+     void unfocus() final;
+-    
++
++    void didJustBlock(String&) override;
++
+     bool canTakeFocus(WebCore::FocusDirection) const final;
+     void takeFocus(WebCore::FocusDirection) final;
+ 
+@@ -93,21 +95,21 @@ private:
+     // created Page has its show method called.
+     RefPtr<WebCore::Page> createWindow(WebCore::LocalFrame&, const String& openedMainFrameName, const WebCore::WindowFeatures&, const WebCore::NavigationAction&) final;
+     void show() final;
+-    
++
+     bool canRunModal() const final;
+     void runModal() final;
+ 
+     void reportProcessCPUTime(Seconds, WebCore::ActivityStateForCPUSampling) final;
+ 
+     bool isPopup() const final;
+-    
++
+     void setResizable(bool) final;
+-    
++
+     void addMessageToConsole(JSC::MessageSource, JSC::MessageLevel, const String& message, unsigned lineNumber, unsigned columnNumber, const String& sourceID) final;
+-    
++
+     bool canRunBeforeUnloadConfirmPanel() final;
+     bool runBeforeUnloadConfirmPanel(String&& message, WebCore::LocalFrame&) final;
+-    
++
+     void closeWindow() final;
+ 
+     void rootFrameAdded(const WebCore::LocalFrame&) final;
+@@ -395,7 +397,7 @@ private:
+ #if ENABLE(APP_HIGHLIGHTS)
+     WebCore::HighlightVisibility appHighlightsVisiblility() const final;
+ #endif
+-    
++
+     void wheelEventHandlersChanged(bool) final;
+ 
+     void didAddHeaderLayer(WebCore::GraphicsLayer&) final;
+@@ -431,7 +433,7 @@ private:
+     void handleSelectionServiceClick(WebCore::FrameIdentifier, WebCore::FrameSelection&, const Vector<String>& telephoneNumbers, const WebCore::IntPoint&) final;
+     bool hasRelevantSelectionServices(bool isTextOnly) const final;
+     void handleImageServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::Image&, WebCore::HTMLImageElement&) final;
+-    void handlePDFServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&);
++    void handlePDFServiceClick(WebCore::FrameIdentifier, const WebCore::IntPoint&, WebCore::HTMLAttachmentElement&) override;
+ #endif
+ 
+     bool shouldDispatchFakeMouseMoveEvents() const final;
+@@ -530,7 +532,7 @@ private:
+     void beginSystemPreview(const URL&, const WebCore::SecurityOriginData& topOrigin, const WebCore::SystemPreviewInfo&, CompletionHandler<void()>&&) final;
+ #endif
+ 
+-    bool isUsingUISideCompositing() const;
++    bool isUsingUISideCompositing() const override;
+ 
+     bool isInStableState() const final;
+ 
+@@ -557,7 +559,7 @@ private:
+ 
+     void addDestinationTextAnimationForActiveWritingToolsSession(const WTF::UUID& sourceAnimationUUID, const WTF::UUID& destinationAnimationUUID, const std::optional<WebCore::CharacterRange>&, const String&) final;
+ 
+-    void saveSnapshotOfTextPlaceholderForAnimation(const WebCore::SimpleRange&);
++    void saveSnapshotOfTextPlaceholderForAnimation(const WebCore::SimpleRange&) override;
+ 
+     void clearAnimationsForActiveWritingToolsSession() final;
+ 
+-- 
+2.46.2
+

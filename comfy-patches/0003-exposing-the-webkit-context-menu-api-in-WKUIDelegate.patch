@@ -1,0 +1,116 @@
+From d6a36dd74697a051e2a23b9397eaf2cc9a76d299 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 7 Oct 2026 20:10:29 -0500
+Subject: [PATCH 03/11] exposing the webkit context menu api in WKUIDelegate
+
+---
+ Source/WebKit/Modules/OSX_Private.modulemap            | 10 ----------
+ Source/WebKit/Shared/API/Cocoa/WebKit.h                |  4 ++++
+ Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h       |  5 +++++
+ .../WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h   |  1 -
+ Source/WebKit/WebKit.xcodeproj/project.pbxproj         |  4 ++--
+ 5 files changed, 11 insertions(+), 13 deletions(-)
+
+diff --git a/Source/WebKit/Modules/OSX_Private.modulemap b/Source/WebKit/Modules/OSX_Private.modulemap
+index fb8d138a5ded..008b3138d022 100644
+--- a/Source/WebKit/Modules/OSX_Private.modulemap
++++ b/Source/WebKit/Modules/OSX_Private.modulemap
+@@ -1729,11 +1729,6 @@ framework module WebKit_Private [system] {
+     export *
+   }
+ 
+-  explicit module _WKContextMenuElementInfo {
+-    header "_WKContextMenuElementInfo.h"
+-    export *
+-  }
+-
+   explicit module _WKCustomHeaderFields {
+     header "_WKCustomHeaderFields.h"
+     export *
+@@ -1804,11 +1799,6 @@ framework module WebKit_Private [system] {
+     export *
+   }
+ 
+-  explicit module _WKHitTestResult {
+-    header "_WKHitTestResult.h"
+-    export *
+-  }
+-
+   explicit module _WKIconLoadingDelegate {
+     header "_WKIconLoadingDelegate.h"
+     export *
+diff --git a/Source/WebKit/Shared/API/Cocoa/WebKit.h b/Source/WebKit/Shared/API/Cocoa/WebKit.h
+index d5077f7b38bf..653cf707a5cd 100644
+--- a/Source/WebKit/Shared/API/Cocoa/WebKit.h
++++ b/Source/WebKit/Shared/API/Cocoa/WebKit.h
+@@ -39,6 +39,10 @@
+ #import <WebKit/WKFindResult.h>
+ #import <WebKit/WKFormInfo.h>
+ #import <WebKit/WKFoundation.h>
++#if TARGET_OS_OSX
++#import <WebKit/_WKHitTestResult.h>
++#import <WebKit/_WKContextMenuElementInfo.h>
++#endif
+ #import <WebKit/WKFrameInfo.h>
+ #import <WebKit/WKHTTPCookieStore.h>
+ #import <WebKit/WKImmersiveEnvironment.h>
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
+index 91f1dffd78e7..0405baa4dd13 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegate.h
+@@ -38,6 +38,7 @@ NS_ASSUME_NONNULL_BEGIN
+ @class WKWebView;
+ @class WKWebViewConfiguration;
+ @class WKWindowFeatures;
++@class _WKContextMenuElementInfo;
+ 
+ #if TARGET_OS_IOS || (defined(TARGET_OS_VISION) && TARGET_OS_VISION)
+ @class WKContextMenuElementInfo;
+@@ -82,6 +83,10 @@ WK_SWIFT_UI_ACTOR
+ 
+ @optional
+ 
++#if TARGET_OS_OSX
++- (void)_webView:(WKWebView * _Null_unspecified)webView getContextMenuFromProposedMenu:(NSMenu * _Null_unspecified)menu forElement:(_WKContextMenuElementInfo * _Null_unspecified)element userInfo:(id<NSSecureCoding> _Null_unspecified)userInfo completionHandler:(void (^ _Null_unspecified)(NSMenu * _Null_unspecified))completionHandler WK_API_AVAILABLE(macos(10.14));
++#endif
++
+ /*! @abstract Creates a new web view.
+  @param webView The web view invoking the delegate method.
+  @param configuration The configuration to use when creating the new web
+diff --git a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h
+index 33d63f4c8055..e9780e0741ef 100644
+--- a/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h
++++ b/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h
+@@ -338,7 +338,6 @@ struct UIEdgeInsets;
+ - (void)_webView:(WKWebView *)webView unavailablePlugInButtonClickedWithReason:(_WKPlugInUnavailabilityReason)reason plugInInfo:(NSDictionary *)plugInInfo;
+ - (NSMenu *)_webView:(WKWebView *)webView contextMenu:(NSMenu *)menu forElement:(_WKContextMenuElementInfo *)element WK_API_DEPRECATED_WITH_REPLACEMENT("_webView:getContextMenuFromProposedMenu:forElement:userInfo:completionHandler:", macos(10.12, 10.14.4));
+ - (NSMenu *)_webView:(WKWebView *)webView contextMenu:(NSMenu *)menu forElement:(_WKContextMenuElementInfo *)element userInfo:(id <NSSecureCoding>)userInfo WK_API_DEPRECATED_WITH_REPLACEMENT("_webView:getContextMenuFromProposedMenu:forElement:userInfo:completionHandler:", macos(10.12, 10.14.4));
+-- (void)_webView:(WKWebView *)webView getContextMenuFromProposedMenu:(NSMenu *)menu forElement:(_WKContextMenuElementInfo *)element userInfo:(id <NSSecureCoding>)userInfo completionHandler:(void (^)(NSMenu *))completionHandler WK_API_AVAILABLE(macos(10.14));
+ - (void)_webView:(WKWebView *)webView didPerformDragOperation:(BOOL)handled WK_API_AVAILABLE(macos(10.14.4));
+ 
+ /*! @abstract Called before WebKit begins a drag session for a WebKit-initiated drag, allowing the client
+diff --git a/Source/WebKit/WebKit.xcodeproj/project.pbxproj b/Source/WebKit/WebKit.xcodeproj/project.pbxproj
+index 7a9268c90276..c019e4a55257 100644
+--- a/Source/WebKit/WebKit.xcodeproj/project.pbxproj
++++ b/Source/WebKit/WebKit.xcodeproj/project.pbxproj
+@@ -352,7 +352,7 @@
+ 		1A4D664C18A3030E00D82E21 /* WKFrameInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A4D664A18A3030E00D82E21 /* WKFrameInfo.h */; settings = {ATTRIBUTES = (Public, ); }; };
+ 		1A52C0F81A38CDC70016160A /* WebStorageNamespaceProvider.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A52C0F61A38CDC70016160A /* WebStorageNamespaceProvider.h */; };
+ 		1A53C2AA1A325730004E8C70 /* WebsiteDataStore.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A53C2A51A32569F004E8C70 /* WebsiteDataStore.h */; };
+-		1A5704F81BE01FF400874AF1 /* _WKContextMenuElementInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704F61BE01FF400874AF1 /* _WKContextMenuElementInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
++		1A5704F81BE01FF400874AF1 /* _WKContextMenuElementInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704F61BE01FF400874AF1 /* _WKContextMenuElementInfo.h */; settings = {ATTRIBUTES = (Public, ); }; };
+ 		1A5704FC1BE1751100874AF1 /* RemoteObjectInvocation.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5704FA1BE1751100874AF1 /* RemoteObjectInvocation.h */; };
+ 		1A5705111BE410E600874AF1 /* BlockSPI.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A5705101BE410E500874AF1 /* BlockSPI.h */; };
+ 		1A57109F1ABA0027002FABBE /* WKWebsiteDataStoreRef.h in Headers */ = {isa = PBXBuildFile; fileRef = 1A57109D1ABA0027002FABBE /* WKWebsiteDataStoreRef.h */; settings = {ATTRIBUTES = (Private, ); }; };
+@@ -1901,7 +1901,7 @@
+ 		93D6B7B4255268D50058DD3A /* SpeechRecognitionPermissionRequest.h in Headers */ = {isa = PBXBuildFile; fileRef = 93D6B7AF255268A10058DD3A /* SpeechRecognitionPermissionRequest.h */; };
+ 		93D6B7B5255268D70058DD3A /* SpeechRecognitionPermissionManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 93D6B7B2255268A20058DD3A /* SpeechRecognitionPermissionManager.h */; };
+ 		93E05E40282CD560000B69EB /* ProcessStateMonitor.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E05E3E282CD55D000B69EB /* ProcessStateMonitor.h */; };
+-		93E6A4EE1BC5DD3900F8A0E7 /* _WKHitTestResult.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E6A4ED1BC5DD3900F8A0E7 /* _WKHitTestResult.h */; settings = {ATTRIBUTES = (Private, ); }; };
++		93E6A4EE1BC5DD3900F8A0E7 /* _WKHitTestResult.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E6A4ED1BC5DD3900F8A0E7 /* _WKHitTestResult.h */; settings = {ATTRIBUTES = (Public, ); }; };
+ 		93E799882756FAC20074008A /* WebFileSystemStorageConnectionMessages.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799812756FA530074008A /* WebFileSystemStorageConnectionMessages.h */; };
+ 		93E799C7276027460074008A /* StorageAreaRegistry.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799C6276027370074008A /* StorageAreaRegistry.h */; };
+ 		93E799CE2760497B0074008A /* SessionStorageManager.h in Headers */ = {isa = PBXBuildFile; fileRef = 93E799CA2760497A0074008A /* SessionStorageManager.h */; };
+-- 
+2.46.2
+
