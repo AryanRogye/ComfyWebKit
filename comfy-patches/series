@@ -1,0 +1,11 @@
+0001-Expose-custom-WebKit-media-APIs.patch
+0002-making-more-apis-public.patch
+0003-exposing-the-webkit-context-menu-api-in-WKUIDelegate.patch
+0004-adding-new-removeUserScript-function.patch
+0005-adding-new-webView-didJustBlock-blockedURL-API.patch
+0006-updating-to-use-250k-content-rules-instead-of-150k.patch
+0007-making-_setShouldSuppressFirstResponderChanges-publi.patch
+0008-creating-new-function-for-settings-picture-in-pictur.patch
+0009-Fix-leftover-cherry-pick-conflict-markers.patch
+0010-removing-whitespace.patch
+0011-removing-unused-code.patch

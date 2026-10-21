@@ -63,12 +63,161 @@ func webView(_ webView: WKWebView, didJustBlock blockedURL: URL) {
 }
 ```
 
-## Getting the source
+## Patch-based development in one checkout
+
+Work and build in this directory. `WebKitBuild/` stays where it is. The published
+branch keeps the Safari 7625 snapshot, patches, and workflow files; customized
+source exists only as local uncommitted changes on a development branch.
+
+### The normal cycle
 
 ```sh
 git clone https://github.com/AryanRogye/ComfyWebKit.git
 cd ComfyWebKit
+python3 comfy-tools/patches.py setup
 ```
+
+**Setup installs the safeguards, creates a fresh local `comfy-dev/...` branch, and
+applies the entire patch series here.** It does not create another checkout or
+commit source. Now edit WebKit files, build, run your app, and test as usual:
+
+```sh
+Tools/Scripts/build-webkit --debug
+Tools/Scripts/run-webkit-app --debug /path/to/YourApp.app
+```
+
+When the change works:
+
+```sh
+./apply_patches.sh
+```
+
+Despite the historical filename, this command now **exports your additional edits
+as the next numbered patch, restores the original upstream source, and switches
+back to the publishing branch you started from**. The default patch subject is
+`Local WebKit changes`. To give it a useful name:
+
+```sh
+./apply_patches.sh --subject "Expose the API needed by my app"
+```
+
+Then review and commit only the patch changes:
+
+```sh
+git diff -- comfy-patches/series
+git status --short
+# Open/review the new .patch file too (untracked files do not appear in git diff).
+git add comfy-patches/
+git commit -m "Add WebKit patch for my change"
+```
+
+Repeat `python3 comfy-tools/patches.py setup` whenever you want the customized
+source back. It includes your new patch. Repeating setup during an active session
+preserves your edits. Repeating `./apply_patches.sh` after finishing does nothing.
+Finishing without additional source edits creates no patch and returns you to the
+publishing branch. Do not manually switch branches during an active session.
+
+The existing `WebKitBuild/`, `DerivedData`, and ignored build outputs are never
+cleaned, moved, or included in a patch. This reuses the same build directory.
+Files changed by applying/restoring patches can trigger incremental rebuilds;
+the workflow does not promise zero recompilation.
+
+### New files and staged changes
+
+Changes to tracked source files, deletions, binary files, and executable bits are
+captured automatically. For new files use an explicit argument:
+
+```sh
+./apply_patches.sh --subject "Add a helper" --add Source/path/to/helper.cpp
+```
+
+Repeat `--add` for multiple files. New source files already staged with `git add`
+are also included. Other untracked files are left alone, and ignored files cannot
+be added through this command. Do not run `git commit` on the development branch.
+Your changes are saved as a patch before the source files are restored.
+
+Dirty README, tooling, patch files, and their staging are preserved through branch
+switches; they are not folded into a new source patch. Setup refuses pre-existing
+tracked/staged source edits rather than mixing them with the applied series.
+An untracked file that collides with a patch also causes setup to stop safely.
+
+### Update an existing patch
+
+Start from the publishing branch, stopping at the patch you want to edit:
+
+```sh
+python3 comfy-tools/patches.py setup \
+  --through 0006-updating-to-use-250k-content-rules-instead-of-150k.patch
+# Edit source here. Later patches are not applied in this prefix session.
+./apply_patches.sh \
+  --refresh 0006-updating-to-use-250k-content-rules-instead-of-150k.patch
+```
+
+Refresh keeps the patch's position, author/message headers, and historical
+workflow/documentation hunks. It validates all later patches before saving.
+If a dependency conflicts, it stops with your edits and old patch intact.
+Narrow or adjust the edit before retrying. It will not fold later patches into an
+earlier patch. To build/test the complete refreshed stack, run setup again without
+`--through`. No second checkout is involved.
+
+The equivalent explicit commands are `python3 comfy-tools/patches.py finish`
+(or `create`) and `python3 comfy-tools/patches.py refresh PATCH_FILENAME`.
+
+### Verify and export
+
+```sh
+python3 comfy-tools/patches.py verify
+# Historical references, if present in your clone:
+python3 comfy-tools/patches.py verify --against comfy-build
+python3 comfy-tools/patches.py verify --against backup/comfy-safari
+python3 comfy-tools/patches.py export ../ComfyWebKit-patch-export
+python3 comfy-tools/test_workflow.py
+```
+
+Verification uses an isolated Git index without another source checkout.
+`--against` compares every source path, excluding explicitly permitted workflow
+metadata. Export copies the patch files, `base`, and `series`; it refuses to
+overwrite differing files. Integration tests use tiny disposable repositories.
+
+`comfy-patches/series` defines the order. `comfy-patches/base` pins the original
+patch baseline, `b809551f8a0a4ac2e2a82d1fb1d1edb0201448a5`. Use a full clone so this
+commit is available. The original 11 patch files remain unchanged. Their old
+README/ignore-rule hunks are validated as part of the series, but setup applies
+only source hunks to your checkout, retaining your current publishing metadata.
+
+### Safety and recovery
+
+Setup creates a uniquely named branch at the current publishing commit. Existing
+branches, including `comfy-build` and all backups, are never reset, deleted, or
+rewritten. Local development branches contain no additional source commits and
+are retained. Setup can also start from a publishing feature branch whose source
+matches the pinned baseline; finish returns to that branch. The push hook permits
+only main-to-main pushes.
+
+Git hooks block upstream source commits on all branches and block pushes of
+development branches, backups, tags, detached refs, or history containing source
+changes after the pinned baseline. Only patches, workflow files, README, ignore
+rules, and the root launcher may be committed. Hooks are local safeguards and can
+be bypassed; every clone must run setup. Existing hook configurations are preserved
+by refusing to replace them. No command fetches, pushes, or alters GitHub settings.
+
+Session state, saved source tree objects, a staged diff, and a finish recovery
+record live under `.git/comfy-inplace.json`. Completed recovery records are retained
+in `.git/comfy-session-history/` when starting the next session. A file lock prevents overlapping
+workflow commands. Finish saves and validates the patch before restoring only the
+source files belonging to the session; unrelated files and workflow staging stay
+in place. If setup is interrupted, rerun setup. If finish is interrupted, rerun
+`./apply_patches.sh`; its saved transaction can resume even between patch and
+series writes. If additional edits, moved branch tips, or changed patches make
+recovery ambiguous, it stops with the saved record intact. Never delete that
+record, run `git reset --hard`, or run `git clean` to recover; inspect the state
+and saved tree first. Do not run branch-changing commands during a session.
+
+This adopts [Helium's ordered patch/edit/refresh model](https://github.com/imputnet/helium/blob/main/CONTRIBUTING.md#working-with-patches).
+[Helium uses quilt](https://github.com/imputnet/helium-macos/blob/main/docs/building.md#development-build-and-environment)
+for stack navigation and file tracking. Git already provides the index and binary
+patch support needed here. Quilt would add a dependency and require migrating the
+existing format-patch series, so this workflow uses Git and Python 3.9+ only.
 
 ## Building on macOS
 
@@ -79,7 +228,8 @@ xcode-select --install
 xcodebuild -downloadComponent MetalToolchain
 ```
 
-From the repository root, build a debug version:
+Run `python3 comfy-tools/patches.py setup` first, then build here using the existing
+`WebKitBuild/` directory. Build a debug version:
 
 ```sh
 Tools/Scripts/build-webkit --debug

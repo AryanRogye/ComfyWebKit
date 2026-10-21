@@ -1,9 +1,4 @@
 #!/bin/bash
-
-set -e
-
-git switch main
-git switch -c comfy-build
-git am comfy-patches/*.patch
-
-echo "ComfyWebKit patches applied successfully!"
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+exec python3 "$ROOT/comfy-tools/patches.py" finish "$@"
