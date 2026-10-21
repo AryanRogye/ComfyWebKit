@@ -60,6 +60,10 @@ with tempfile.TemporaryDirectory(prefix='comfy-tests-') as tmp:
     first_branch = g('branch','--show-current')
     assert first_branch.startswith(b'comfy-dev/')
     assert (root/'engine').read_text() == 'ONE\ntwo\nthree\n'
+    assert g('diff','HEAD','--','engine') == b''
+    assert g('diff','--cached','--','engine') == b''
+    assert g('show','HEAD:ReadMe.md') == b'original docs\n'
+    assert g('rev-parse','HEAD').decode().strip() != base
     (root/'engine').write_text('ONE\nTWO\nthree\n')
     (root/'new-file').write_text('new\n')
     (root/'unrelated-file').write_text('leave this alone\n')
@@ -101,11 +105,11 @@ with tempfile.TemporaryDirectory(prefix='comfy-tests-') as tmp:
     assert (root/'extra').read_text() == 'extra\n'
     tool('finish')
     assert not (root/'extra').exists()
-    # Simulate interruption after setup applied source but before state is active.
+    # Simulate interruption after baseline ref advancement, before marking active.
     tool('setup')
     state_path = root/'.git/comfy-inplace.json'
     state = json.loads(state_path.read_text())
-    state['phase'] = 'opening'
+    state['phase'] = 'baselining'
     state_path.write_text(json.dumps(state))
     tool('setup')
     (root/'engine').write_text('ONE\nTWO\nrecovery-test\n')
@@ -130,6 +134,50 @@ with tempfile.TemporaryDirectory(prefix='comfy-tests-') as tmp:
     state_path.write_text(json.dumps(state))
     tool('finish')
     assert json.loads(state_path.read_text())['phase'] == 'done'
+    # Upgrade a legacy active session without committing the user's staged edits.
+    legacy_code = ("import importlib.util,sys; "
+                   "s=importlib.util.spec_from_file_location('workflow',sys.argv[1]); "
+                   "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                   "m.baseline=lambda state: (state.update(phase='active'),m.save(state)); "
+                   "sys.argv=['patches.py','setup']; m.main()")
+    run('python3','-c',legacy_code,str(root/'comfy-tools/patches.py'),cwd=root)
+    assert g('rev-parse','HEAD').decode().strip() == base
+    (root/'engine').write_text('legacy staged edit\n')
+    g('add','engine')
+    prior_index = g('write-tree')
+    tool('setup')
+    assert g('write-tree') == prior_index
+    assert (root/'engine').read_text() == 'legacy staged edit\n'
+    assert g('show','HEAD:engine') == b'ONE\nTWO\nrecovery-test\n'
+    assert g('rev-parse','HEAD^').decode().strip() == base
+    tool('abort')
+    # Abort keeps the patch series intact and saves edits before branch return.
+    tool('setup')
+    baseline_head = g('rev-parse','HEAD').decode().strip()
+    tool('guard','pre-push',data=f'refs/heads/main {baseline_head} refs/heads/main {"0"*40}\n'.encode(),ok=False)
+    old_patches = {p.name:p.read_bytes() for p in (root/'comfy-patches').glob('*')}
+    (root/'engine').write_text('ONE\nTWO\nabort-edit\n')
+    (root/'abort-added').write_text('saved staged addition\n')
+    (root/'abort-untracked').write_text('keep untracked in place\n')
+    g('add','engine','abort-added')
+    tool('abort')
+    assert g('branch','--show-current').strip() == b'main'
+    assert (root/'engine').read_text() == 'one\ntwo\nthree\n'
+    assert not (root/'abort-added').exists()
+    assert (root/'abort-untracked').read_text() == 'keep untracked in place\n'
+    assert old_patches == {p.name:p.read_bytes() for p in (root/'comfy-patches').glob('*')}
+    state = json.loads(state_path.read_text())
+    recovery = root/'.git/comfy-aborted-sessions'/(state['branch'].replace('/','-')+'.patch')
+    assert recovery.exists() and recovery.read_bytes()
+    assert state['staged_tree']
+    tool('abort')
+    tool('setup')
+    g('apply',str(recovery))
+    assert (root/'engine').read_text() == 'ONE\nTWO\nabort-edit\n'
+    assert (root/'abort-added').read_text() == 'saved staged addition\n'
+    tool('abort')
+    assert (root/'WebKitBuild/artifact').read_bytes() == b'keep-this-build'
+    assert g('show',':ReadMe.md') == docs_index
     # Staged deletion must be restored from origin, even when no longer indexed.
     tool('setup')
     g('rm','-f','engine')
@@ -150,4 +198,4 @@ with tempfile.TemporaryDirectory(prefix='comfy-tests-') as tmp:
     tool('guard','pre-push',data=f'refs/heads/main {base} refs/heads/main {"0"*40}\n'.encode())
     assert g('rev-parse','HEAD').decode().strip() == base
     assert g('worktree','list','--porcelain').count(b'worktree ') == 1
-    print('PASS: in-place setup/finish, dirty reruns, create/refresh, conflicts, new files, staged docs, unrelated files, unchanged base/patch, retained branches/builds, interruption recovery, export and guards')
+    print('PASS: clean local baselines, in-place setup/finish/abort and edit recovery, dirty reruns, create/refresh, conflicts, new files, staged docs, unrelated files, unchanged base/patch, retained branches/builds, interruption recovery, export and guards')

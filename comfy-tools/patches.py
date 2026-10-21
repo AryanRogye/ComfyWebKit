@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ordered WebKit patches; source edits never require source commits."""
+"""Ordered WebKit patches with a clean, local-only development baseline."""
 import argparse
 import base64
 import fcntl
@@ -88,6 +88,8 @@ def allowed(path):
 
 def guard(mode):
     if mode == 'pre-commit':
+        if git('branch','--show-current',cwd=Path.cwd()).decode().strip().startswith('comfy-dev/'):
+            fail('Finish or abort the development session before committing. Setup manages its local baseline automatically.')
         paths = git('diff', '--cached', '--name-only', '--no-renames', '-z', cwd=Path.cwd()).decode().split('\0')
         if any(p and not allowed(p) for p in paths):
             fail('Source commits are disabled. Run ./apply_patches.sh to save edits as a patch.')
@@ -176,8 +178,33 @@ def overlay(origin, patched):
 
 
 def check_session(state):
-    if branch() != state['branch'] or git('rev-parse', 'HEAD').decode().strip() != state['origin']:
+    if branch() != state['branch'] or git('rev-parse', 'HEAD').decode().strip() != state.get('baseline', state['origin']):
         fail('Session branch or HEAD changed. Return to ' + state['branch'] + '; no files were restored.')
+
+
+def baseline(state):
+    """Append an automatic local commit; never include the developer's index."""
+    if state.get('baseline') and state['phase'] != 'baselining':
+        return
+    current_branch = branch()
+    head = git('rev-parse','HEAD').decode().strip()
+    if current_branch != state['branch'] or head not in (state['origin'],state.get('baseline')):
+        fail('Cannot create the patch baseline: session branch or HEAD changed')
+    if not state.get('baseline'):
+        env = dict(os.environ, GIT_AUTHOR_NAME='ComfyWebKit patch workflow',
+                   GIT_AUTHOR_EMAIL='patches@comfywebkit.local',
+                   GIT_COMMITTER_NAME='ComfyWebKit patch workflow',
+                   GIT_COMMITTER_EMAIL='patches@comfywebkit.local')
+        message = f"Apply {state['count']} ComfyWebKit patches (local development baseline)\n"
+        state['baseline'] = git('commit-tree',state['applied'],'-p',state['origin'],
+                                env=env,data=message.encode()).decode().strip()
+        state['phase'] = 'baselining'
+        save(state)
+    if head == state['origin']:
+        # Compare-and-swap, always a new child of origin: no rewritten history.
+        git('update-ref','refs/heads/'+state['branch'],state['baseline'],state['origin'])
+    state['phase'] = 'active'
+    save(state)
 
 
 def setup(args, names):
@@ -188,6 +215,8 @@ def setup(args, names):
             fail('Patch series changed during this session; source edits preserved')
         if args.through and names[state['count']-1] != args.through:
             fail('Already editing at a different patch position; finish this session first')
+        if state['phase'] == 'baselining':
+            baseline(state)
         if state['phase'] == 'opening':
             # Resume an interruption immediately before/after switch or apply.
             head = git('rev-parse', 'HEAD').decode().strip()
@@ -216,7 +245,8 @@ def setup(args, names):
         check_session(state)
         if state['phase'] != 'active':
             fail('Finish was interrupted; rerun ./apply_patches.sh to resume it')
-        print('Already set up here; source edits and WebKitBuild preserved.')
+        baseline(state)
+        print('Local patch baseline ready; only your new edits appear in git status. WebKitBuild preserved.')
         return
     if state and state['phase'] == 'done':
         archive = admin()/'comfy-session-history'
@@ -249,9 +279,8 @@ def setup(args, names):
     git('switch', '-c', dev)
     if diff:
         git('apply', '--index', '--whitespace=nowarn', '-', data=diff)
-    state['phase'] = 'active'
-    save(state)
-    print('Patches applied in this directory on ' + dev + '. Build and edit here, then run ./apply_patches.sh.')
+    baseline(state)
+    print('Patches committed locally in this directory on ' + dev + '. Build and edit here, then run ./apply_patches.sh.')
 
 
 def finish(args, names):
@@ -312,7 +341,31 @@ def finish(args, names):
                  candidate=base64.b64encode(candidate).decode() if candidate else None,
                  series=new_names,
                  previous_patch=base64.b64encode((PATCHES/name).read_bytes()).decode() if name and (PATCHES/name).exists() else None,
+                 staged_tree=git('write-tree').decode().strip(),
                  staged=base64.b64encode(git('diff','--cached','--binary','--full-index')).decode())
+    save(state)
+    complete(state)
+
+
+def abort_session(args):
+    state = read_state()
+    if not state or state['phase'] == 'done':
+        print('No active session to abort.')
+        return
+    if state['phase'] == 'finishing':
+        fail('Finish already started; rerun ./apply_patches.sh to complete that saved transaction')
+    if state['phase'] == 'aborting':
+        return complete(state)
+    if state['phase'] != 'active':
+        fail('Setup was interrupted; rerun setup before aborting')
+    check_session(state)
+    # Untracked and ignored files stay in place. Tracked and staged source edits
+    # are saved before cleanup, with the original index tree retained separately.
+    after = snapshot(state['applied'])
+    state.update(phase='aborting', after=after, patch=None, candidate=None,
+                 staged_tree=git('write-tree').decode().strip(),
+                 staged=base64.b64encode(git('diff','--cached','--binary','--full-index')).decode(),
+                 saved_edits=base64.b64encode(source_diff(state['applied'],after)).decode())
     save(state)
     complete(state)
 
@@ -321,6 +374,11 @@ def complete(state):
     if branch() == state['origin_branch'] and git('rev-parse','HEAD').decode().strip() == state['origin']:
         if source_paths(state['origin'], snapshot(state['origin'])):
             fail('Source changed after branch return; recovery state preserved')
+        if state['phase'] == 'aborting':
+            recovery = admin()/'comfy-aborted-sessions'
+            recovery.mkdir(exist_ok=True)
+            atomic(recovery/(state['branch'].replace('/','-')+'.patch'),base64.b64decode(state['saved_edits']))
+            state['aborted'] = True
         state['phase'] = 'done'
         save(state)
         print('Finish already restored source and returned to '+state['origin_branch']+'.')
@@ -342,6 +400,10 @@ def complete(state):
                 fail('Patch changed after finish started; refusing to overwrite it')
         atomic(dest, content)
         atomic(PATCHES/'series', ('\n'.join(state['series'])+'\n').encode())
+    if state['phase'] == 'aborting':
+        recovery = admin()/'comfy-aborted-sessions'
+        recovery.mkdir(exist_ok=True)
+        atomic(recovery/(state['branch'].replace('/','-')+'.patch'),base64.b64decode(state['saved_edits']))
     paths = sorted(set(source_paths(state['origin'], state['applied']) + source_paths(state['origin'], state['after'])))
     # New files must enter the index before restore can remove their working copy.
     indexed = set(git('ls-files', '-z').decode().split('\0'))
@@ -356,8 +418,18 @@ def complete(state):
         # ignored/untracked build outputs are never part of this path list.
         git('--literal-pathspecs', 'restore', '--source='+state['origin'], '--staged', '--worktree', '--', *paths)
     git('switch', state['origin_branch'])
+    aborted = state['phase'] == 'aborting'
+    state['aborted'] = aborted
     state['phase'] = 'done'
     save(state)
+    if aborted:
+        recovery = admin()/'comfy-aborted-sessions'
+        recovery.mkdir(exist_ok=True)
+        saved = recovery/(state['branch'].replace('/','-')+'.patch')
+        atomic(saved,base64.b64decode(state['saved_edits']))
+        print('Aborted; returned to '+state['origin_branch']+'. Edits saved to '+str(saved)+
+              '. Run setup, then git apply this file to recover source edits. WebKitBuild preserved.')
+        return
     print(('Saved '+state['patch']+'. ' if state['patch'] else 'No new source changes. ') +
           'Returned to '+state['origin_branch']+'; WebKitBuild and workflow edits preserved. Review and commit comfy-patches/.')
 
@@ -374,6 +446,7 @@ def main():
     a = sub.add_parser('refresh', help='Save changes to the current prefix patch and return')
     a.add_argument('name')
     a.add_argument('--add', action='append', default=[])
+    sub.add_parser('abort', help='Save source edits locally and return without changing patches')
     a = sub.add_parser('verify')
     a.add_argument('--against')
     a = sub.add_parser('export')
@@ -391,6 +464,11 @@ def main():
         except BlockingIOError:
             fail('Another patch command is running')
         state = read_state()
+        if args.command == 'abort':
+            abort_session(args)
+            return
+        if state and state['phase'] == 'aborting':
+            fail('Abort was interrupted; rerun python3 comfy-tools/patches.py abort')
         if args.command in ('finish','create','refresh') and state and state['phase'] == 'finishing':
             complete(state)
             return

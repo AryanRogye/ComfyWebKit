@@ -67,7 +67,8 @@ func webView(_ webView: WKWebView, didJustBlock blockedURL: URL) {
 
 Work and build in this directory. `WebKitBuild/` stays where it is. The published
 branch keeps the Safari 7625 snapshot, patches, and workflow files; customized
-source exists only as local uncommitted changes on a development branch.
+source is committed only to a local development branch as an automatic baseline.
+Those source commits are never merged into or pushed from the published branch.
 
 ### The normal cycle
 
@@ -78,8 +79,10 @@ python3 comfy-tools/patches.py setup
 ```
 
 **Setup installs the safeguards, creates a fresh local `comfy-dev/...` branch, and
-applies the entire patch series here.** It does not create another checkout or
-commit source. Now edit WebKit files, build, run your app, and test as usual:
+applies the entire patch series here, and records one local baseline commit.**
+`git status` then shows only your new edits (plus any pre-existing workflow edits).
+No second checkout is created. Now edit WebKit files, build, run your app, and test
+as usual:
 
 ```sh
 Tools/Scripts/build-webkit --debug
@@ -121,6 +124,33 @@ The existing `WebKitBuild/`, `DerivedData`, and ignored build outputs are never
 cleaned, moved, or included in a patch. This reuses the same build directory.
 Files changed by applying/restoring patches can trigger incremental rebuilds;
 the workflow does not promise zero recompilation.
+
+### Abort and return to the publishing branch
+
+Stay on the development branch and run:
+
+```sh
+python3 comfy-tools/patches.py abort
+```
+
+Abort returns to your starting branch (normally `main`) without creating or
+refreshing patches. It first saves tracked/staged source edits as a recovery patch
+under `.git/comfy-aborted-sessions/`; the command prints its exact path. The session
+record also retains the original index tree and staged diff. Untracked source
+files, workflow edits and staging, and ignored build artifacts stay in place.
+No source edits are silently discarded. Repeating abort after completion does
+nothing. An interrupted abort can be resumed by rerunning the same command.
+
+To recover saved source edits later, run setup and apply the printed recovery file:
+
+```sh
+python3 comfy-tools/patches.py setup
+git apply /absolute/path/printed/by/abort.patch
+```
+
+Use the same patch position (`--through`, if used) and patch series when recovering.
+If finish has already begun exporting a patch, complete that transaction by
+rerunning `./apply_patches.sh`; abort will refuse to interrupt it.
 
 ### New files and staged changes
 
@@ -189,12 +219,15 @@ only source hunks to your checkout, retaining your current publishing metadata.
 
 Setup creates a uniquely named branch at the current publishing commit. Existing
 branches, including `comfy-build` and all backups, are never reset, deleted, or
-rewritten. Local development branches contain no additional source commits and
-are retained. Setup can also start from a publishing feature branch whose source
+rewritten. Local development branches retain their automatic source baseline commit.
+Setup creates it from the known patched tree, excluding your dirty/staged work;
+it appends history and never resets a branch. It may upgrade an existing session
+in place: rerun setup to clear the staged patch noise while preserving your edits. Setup can also start from a publishing feature branch whose source
 matches the pinned baseline; finish returns to that branch. The push hook permits
 only main-to-main pushes.
 
-Git hooks block upstream source commits on all branches and block pushes of
+Git hooks block manual commits during development sessions, block upstream source
+commits on publishing branches, and block pushes of
 development branches, backups, tags, detached refs, or history containing source
 changes after the pinned baseline. Only patches, workflow files, README, ignore
 rules, and the root launcher may be committed. Hooks are local safeguards and can
