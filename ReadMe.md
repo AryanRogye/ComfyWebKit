@@ -4,14 +4,53 @@ ComfyWebKit is a downstream fork of [WebKit](https://webkit.org/) that exposes s
 
 The changes currently focus on Cocoa APIs, including macOS-specific media and context menu functionality. The underlying browser engine and build tooling come from WebKit.
 
+### Exposed APIs
+
+- [Now Playing Information](#now-playing-information)
+- [Text Extraction](#text-extraction)
+- [WebContent Process ID](#webcontent-process-identifier)
+- [Context Menus](#context-menus)
+- [Individual User Script Removal](#individual-user-script-removal)
+- [Content Blocking Notifications](#content-blocking-notifications)
+- [WKWebView Focus on Load](#wkwebview-focus-on-load)
+- [Picture in Picture](#allow-picture-in-picture-on-macos)
+
 ## What this fork exposes
 
-### Now Playing information (macOS)
+### Now Playing information
 
 The `WKWebView (NowPlaying)` category exposes:
 
 - `_requestActiveNowPlayingSessionInfo:` for the active Now Playing session’s control visibility, application registration, title, duration, current time, identifier, and update time.
 - `_requestActiveNowPlayingSessionInfoWithPlayback:` adds playback state, artwork URL, and playback rate to that information.
+
+**Usage:**
+```swift
+public func getNowPlayingInfo() {
+    webView?._requestActiveNowPlayingSessionInfo {
+        allowsControlsVisibility,
+        registeredAsNowPlayingApp,
+        isPlaying,
+        title,
+        artwork,
+        rate,
+        duration,
+        currentTime,
+        uniqueIdentifier,
+        updateTime in
+
+        print("controls:", allowsControlsVisibility)
+        print("registered:", registeredAsNowPlayingApp)
+        print("isPlaying:", isPlaying)
+        print("title:", title)
+        print("artwork", artwork)
+        print("duration:", duration)
+        print("currentTime:", currentTime)
+        print("id:", uniqueIdentifier)
+        print("updateTime:", updateTime)
+    }
+}
+```
 
 ### Text extraction
 
@@ -19,11 +58,23 @@ The `WKWebView (TextExtractionDebug)` category exposes `_debugTextWithConfigurat
 
 These methods are annotated for macOS 26.4, iOS 26.4, and visionOS 26.4 and later.
 
+**Usage:**
+```swift
+webView._debugTextVisibleText { str in
+    print("Debug Text:", str)
+}
+```
+
 ### WebContent process identifier
 
 `WKWebView._webProcessIdentifier` exposes the PID of the WebContent process hosting the page. Read it when needed: navigation or process termination can change the PID. Media decoding and audio output may run in other processes.
 
-### Context menus (macOS)
+**Usage:**
+```swift
+let pid = webView._webProcessIdentifier
+```
+
+### Context menus
 
 `WKUIDelegate` exposes `_webView:getContextMenuFromProposedMenu:forElement:userInfo:completionHandler:` so applications can customize the proposed context menu.
 
@@ -31,15 +82,47 @@ These methods are annotated for macOS 26.4, iOS 26.4, and visionOS 26.4 and late
 
 These APIs retain their underscore-prefixed names. “Public” here means exposed by **this fork**; they are not additions to Apple’s system WebKit SDK. Applications need to compile against and run with the ComfyWebKit build to use the fork’s additions.
 
+**Usage:**
+```swift
+@MainActor
+func _webView(
+    _ webView: WKWebView!,
+    getContextMenuFromProposedMenu menu: NSMenu!,
+    forElement element: _WKContextMenuElementInfo!,
+    userInfo: (any NSSecureCoding)!
+) async -> NSMenu? {
+    guard let menu else { return nil }
+
+    if let openLinkItem = menu.items.first(where: { $0.title == "Open Link"}) {
+        let index = menu.index(of: openLinkItem)
+
+        let item = NSMenuItem(
+            title: "Open Link In New Tab",
+            action: #selector(openLinkInNewTab(_:)),
+            keyEquivalent: ""
+        )
+        item.target = self
+        item.representedObject = element?.hitTestResult.absoluteLinkURL
+
+        menu.insertItem(item, at: index + 1)
+    }
+
+    return menu
+}
+```
+
 ### Individual user script removal
 
 `WKUserContentController.h` exposes `removeUserScript:` to remove a specific `WKUserScript` without permanently removing other registered scripts.
-```swift
-webView.configuration.userContentController.removeUserScript(popupBlockingScript)
-```
+
 Unlike `removeAllUserScripts()`, this method preserves the remaining registered scripts and their order.
 
 Implementation note: The current implementation removes all registered scripts internally, then re-adds every script except the specified one. It does not undo JavaScript that has already executed in existing pages.
+
+**Usage:**
+```swift
+webView.configuration.userContentController.removeUserScript(popupBlockingScript)
+```
 
 ### Content blocking notifications
 
@@ -47,20 +130,35 @@ Implementation note: The current implementation removes all registered scripts i
 
 The `blockedURL` parameter identifies the URL that triggered the blocking rule, enabling applications to monitor blocked requests, display blocking statistics, or provide feedback to users.
 
-### WKWebView Focus on load 
-
-`_setShouldSuppressFirstResponderChanges` allows control on the `WKWebView` for it to take firstResponder on load or not
-
-### Allow Picture In Picture on macOS
-
-`setAllowsPictureInPictureMediaPlayback` allows control on `WKPreferences` to allow picture in picture
-
 **Usage:**
 
 ```swift
 func webView(_ webView: WKWebView, didJustBlock blockedURL: URL) {
     print("Blocked URL: \(blockedURL)")
 }
+```
+
+### WKWebView Focus on load 
+
+`_setShouldSuppressFirstResponderChanges` allows control on the `WKWebView` for it to take firstResponder on load or not
+
+**Usage:**
+```swift
+class SomeWKWebViewContainer: WKWebView {
+    override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+        super.init(frame: frame, configuration: configuration)
+        _setShouldSuppressFirstResponderChanges(true)
+    }
+}
+```
+
+### Allow Picture In Picture on macOS
+
+`setAllowsPictureInPictureMediaPlayback` allows control on `WKPreferences` to allow picture in picture
+
+**Usage:**
+```swift
+config.preferences.setAllowsPictureInPictureMediaPlayback(true)
 ```
 
 ## Patch-based development in one checkout
