@@ -180,27 +180,16 @@ python3 comfy-tools/patches.py setup
 applies the entire patch series here, and records one local baseline commit.**
 `git status` then shows only your new edits (plus any pre-existing workflow edits).
 No second checkout is created. Now edit WebKit files, build, run your app, and test
-as usual:
-
-```sh
-Tools/Scripts/build-webkit --debug
-Tools/Scripts/run-webkit-app --debug /path/to/YourApp.app
-```
+as usual
 
 When the change works:
 
 ```sh
-./apply_patches.sh
+./apply_patches.sh --subject "What You Changed"
 ```
 
-Despite the historical filename, this command now **exports your additional edits
-as the next numbered patch, restores the original upstream source, and switches
-back to the publishing branch you started from**. The default patch subject is
-`Local WebKit changes`. To give it a useful name:
-
-```sh
-./apply_patches.sh --subject "Expose the API needed by my app"
-```
+this command now **exports your additional edits as the next numbered patch, restores 
+the original upstream source, and switches back to the publishing branch you started from**. 
 
 Then review and commit only the patch changes:
 
@@ -232,12 +221,7 @@ python3 comfy-tools/patches.py abort
 ```
 
 Abort returns to your starting branch (normally `main`) without creating or
-refreshing patches. It first saves tracked/staged source edits as a recovery patch
-under `.git/comfy-aborted-sessions/`; the command prints its exact path. The session
-record also retains the original index tree and staged diff. Untracked source
-files, workflow edits and staging, and ignored build artifacts stay in place.
-No source edits are silently discarded. Repeating abort after completion does
-nothing. An interrupted abort can be resumed by rerunning the same command.
+refreshing patches. 
 
 To recover saved source edits later, run setup and apply the printed recovery file:
 
@@ -366,10 +350,17 @@ Run `python3 comfy-tools/patches.py setup` first, then build here using the exis
 Tools/Scripts/build-webkit --debug
 ```
 
-For a release build:
+For the usual CMake release build with five parallel jobs:
 
 ```sh
-Tools/Scripts/build-webkit --release
+./comfy-tools/build.sh
+```
+
+This runs the following command from the repository root and forwards any extra
+arguments you supply:
+
+```sh
+Tools/Scripts/build-webkit --release --cmake --makeargs="-j5"
 ```
 
 To include debug symbols in a release build:
@@ -379,6 +370,23 @@ Tools/Scripts/build-webkit --release DEBUG_INFORMATION_FORMAT=dwarf-with-dsym
 ```
 
 You can also open `WebKit.xcworkspace` in Xcode and select the **Everything up to WebKit + Tools** scheme. If you use Xcode’s default build location, set the workspace’s advanced build location to **Custom → Relative to Workspace**, with `WebKitBuild` for both Products and Intermediates.
+
+### Restage headers without rebuilding WebKit
+
+With the patches applied and an existing configured macOS CMake build, run:
+
+```sh
+./comfy-tools/stage-headers.sh
+# Or select another configured CMake build directory:
+./comfy-tools/stage-headers.sh /path/to/cmake-build
+```
+
+The default is `WebKitBuild/cmake-mac/Release`. This requests only
+`WebKit_StageFrameworkHeaders`, including JavaScriptCore headers and Clang module
+maps. CMake may regenerate its build rules first. It does not request compilation
+of the WebKit library or regeneration of compiled Swift modules. Source-code
+changes still require an incremental build to update the binary; staging headers
+alone does not apply a runtime fix or verify binary/header compatibility.
 
 ## Running your app with the local build
 
