@@ -11,3 +11,4 @@
 0011-removing-unused-code.patch
 0012-configuring-cmake-to-expose-headers-to-a-xcode-project.patch
 0013-update-cocoa-proxy-and-websocket-handling.patch
+0014-checking-for-incorrect-frames.patch

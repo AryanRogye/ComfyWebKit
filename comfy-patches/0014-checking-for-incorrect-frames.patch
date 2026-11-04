@@ -1,0 +1,21 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: AryanRogye <aryan.rogye@gmail.com>
+Date: Wed, 04 Nov 2026 12:05:31 -0600
+Subject: [PATCH] Checking for incorrect frames
+
+---
+diff --git a/Source/WebKit/UIProcess/mac/WebViewImpl.mm b/Source/WebKit/UIProcess/mac/WebViewImpl.mm
+index 8264fb131a9d40ea930e2ea8453f39e573840b28..a6fb77e3ae9ff5c6da596f9e6a2419cf57ebb0f5 100644
+--- a/Source/WebKit/UIProcess/mac/WebViewImpl.mm
++++ b/Source/WebKit/UIProcess/mac/WebViewImpl.mm
+@@ -1288,6 +1288,10 @@ static void* imageOverlayObservationContext = &imageOverlayObservationContext;
+ 
+     auto unitInteractionRect = _impl->imageAnalysisInteractionBounds();
+     WebCore::FloatRect unobscuredRect = protect(CheckedPtr { _impl }->view()).get().bounds;
++    // Fullscreen layout can request selection geometry before the video or view
++    // has usable bounds. Avoid passing a degenerate transform to VisionKit.
++    if (unitInteractionRect.isEmpty() || unobscuredRect.isEmpty())
++        return CGRectMake(0, 0, 1, 1);
+     unitInteractionRect.moveBy(-unobscuredRect.location());
+     unitInteractionRect.scale(1 / unobscuredRect.size());
+     return unitInteractionRect;
