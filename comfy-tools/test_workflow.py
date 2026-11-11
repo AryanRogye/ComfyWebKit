@@ -198,4 +198,27 @@ with tempfile.TemporaryDirectory(prefix='comfy-tests-') as tmp:
     tool('guard','pre-push',data=f'refs/heads/main {base} refs/heads/main {"0"*40}\n'.encode())
     assert g('rev-parse','HEAD').decode().strip() == base
     assert g('worktree','list','--porcelain').count(b'worktree ') == 1
+    # A publishing metadata commit made while the dev session is active is safe
+    # for abort. Create it without checking out or modifying working source.
+    tool('setup')
+    advance = ("import importlib.util,sys; "
+               "s=importlib.util.spec_from_file_location('workflow',sys.argv[1]); "
+               "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+               "parent=m.git('rev-parse','main').decode().strip(); "
+               "ctx=m.index(parent); env=ctx.__enter__(); "
+               "blob=m.git('hash-object','-w','--stdin',data=b'new content\\n').decode().strip(); "
+               "m.git('update-index','--add','--cacheinfo','100644,'+blob+','+sys.argv[2],env=env); "
+               "tree=m.git('write-tree',env=env).decode().strip(); "
+               "tip=m.git('commit-tree',tree,'-p',parent,data=b'Advance publishing branch\\n').decode().strip(); "
+               "m.git('update-ref','refs/heads/main',tip,parent); ctx.__exit__(None,None,None)")
+    run('python3','-c',advance,str(root/'comfy-tools/patches.py'),'comfy-tools/marker',cwd=root)
+    tool('abort')
+    assert g('branch','--show-current').strip() == b'main'
+    assert (root/'comfy-tools/marker').exists()
+    tool('setup')
+    before_abort = (root/'engine').exists()
+    run('python3','-c',advance,str(root/'comfy-tools/patches.py'),'engine',cwd=root)
+    tool('abort',ok=False)
+    assert g('branch','--show-current').startswith(b'comfy-dev/')
+    assert (root/'engine').exists() == before_abort
     print('PASS: clean local baselines, in-place setup/finish/abort and edit recovery, dirty reruns, create/refresh, conflicts, new files, staged docs, unrelated files, unchanged base/patch, retained branches/builds, interruption recovery, export and guards')

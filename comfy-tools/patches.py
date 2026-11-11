@@ -371,7 +371,18 @@ def abort_session(args):
 
 
 def complete(state):
-    if branch() == state['origin_branch'] and git('rev-parse','HEAD').decode().strip() == state['origin']:
+    destination = git('rev-parse','refs/heads/'+state['origin_branch']).decode().strip()
+    expected = state.get('return_tip', state['origin'])
+    if destination != expected:
+        forward = subprocess.run(['git','merge-base','--is-ancestor',expected,destination],
+                                 cwd=ROOT,capture_output=True).returncode == 0
+        if state['phase'] != 'aborting' or not forward or source_paths(state['origin'],destination):
+            fail('Publishing branch moved during the session; source preserved')
+        # Abort exports no published patches. A metadata-only forward advance is
+        # safe because restoring origin's source also matches the destination.
+        state['return_tip'] = destination
+        save(state)
+    if branch() == state['origin_branch'] and git('rev-parse','HEAD').decode().strip() == destination:
         if source_paths(state['origin'], snapshot(state['origin'])):
             fail('Source changed after branch return; recovery state preserved')
         if state['phase'] == 'aborting':
@@ -384,8 +395,6 @@ def complete(state):
         print('Finish already restored source and returned to '+state['origin_branch']+'.')
         return
     check_session(state)
-    if git('rev-parse', 'refs/heads/'+state['origin_branch']).decode().strip() != state['origin']:
-        fail('Publishing branch moved during the session; source preserved')
     # Refuse to overwrite edits made after the saved transaction. Accept files
     # already restored by a previous interrupted finish, one path at a time.
     current = snapshot(state['after'])
