@@ -360,7 +360,7 @@ This runs the following command from the repository root and forwards any extra
 arguments you supply:
 
 ```sh
-Tools/Scripts/build-webkit --release --cmake --makeargs="-j5"
+Tools/Scripts/build-webkit --release --cmake --makeargs="-j5" --cmakeargs="-DCMAKE_OSX_DEPLOYMENT_TARGET=<deployment-target>"
 ```
 
 To include debug symbols in a release build:
